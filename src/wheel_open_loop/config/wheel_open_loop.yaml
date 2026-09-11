@@ -1,0 +1,20 @@
+/wheel_open_loop:
+  ros__parameters:
+
+    # ---- serial link to the ESP32, same as wheel_control ----
+    port: /dev/ttyACM0
+    baud: 115200
+    tx_rate_hz: 50.0          # must stay well inside the firmware's 300 ms failsafe
+
+    # ---- mix: copy from wheel_control.yaml so feedback is the only difference ----
+    base_pwm: 30              # = base_pwm in wheel_control.yaml
+    k_turn: 30.0              # = k_ff in wheel_control.yaml, PWM counts per rad/s
+    max_pwm: 255
+
+    # ---- plumbing, same wiring as wheel_control ----
+    control_rate_hz: 50.0
+    cmd_timeout_s: 0.5
+    swap_motors: false
+    invert_motor1: false
+    invert_motor2: true
+    publish_debug: true
