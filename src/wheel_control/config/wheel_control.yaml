@@ -1,0 +1,43 @@
+/wheel_control:
+  ros__parameters:
+
+    # ---- serial link to the ESP32 ----
+    port: /dev/ttyACM0
+    baud: 115200
+    tx_rate_hz: 50.0          # must stay well inside the firmware's 300 ms failsafe
+
+    # ---- control loop ----
+    control_rate_hz: 50.0
+    base_pwm: 30              # open-loop forward/reverse effort
+    min_pwm: 27               # measure this: lowest PWM that actually turns a wheel
+    max_pwm: 255
+    deadband_mode: floor      # 'floor' keeps base_pwm literal; 'rescale' is smoother
+    pwm_slew_per_s: 400.0     # PWM counts/s; lower = gentler on the battery
+
+    # ---- inner loop: yaw rate (PWM counts per rad/s) ----
+    k_ff: 35.0                # feedforward. Tune FIRST, before any gain below.
+    kp: 45.0
+    ki: 60.0
+    kd: 0.0                   # leave at 0 unless you have a real reason
+    kd_tau: 0.08              # derivative low-pass, seconds
+    i_limit: 90.0             # cap on the integral's contribution, PWM counts
+    u_limit: 175.0            # 255 - base_pwm: the actual differential headroom
+
+    # ---- outer loop: heading hold ----
+    heading_hold: true        # this is what makes "forward" a straight line
+    k_heading: 1.2            # rad/s of correction per rad of heading error
+    max_heading_corr: 0.6     # rad/s; keep well under your max turn rate
+
+    # ---- IMU ----
+    imu_topic: /bno055/imu
+    imu_yaw_sign: 1.0         # set -1.0 if the BNO055 z axis points down
+    gyro_deadband: 0.01       # rad/s
+    calib_samples: 200        # robot MUST be still while these are collected
+    imu_timeout_s: 0.3
+
+    # ---- plumbing ----
+    cmd_timeout_s: 0.5
+    swap_motors: false         # true if motor1 is the RIGHT wheel
+    invert_motor1: false
+    invert_motor2: true
+    publish_debug: true
