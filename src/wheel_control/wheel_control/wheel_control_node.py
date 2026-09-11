@@ -83,7 +83,8 @@ class WheelControl(Node):
             # control
             ('control_rate_hz', 50.0),
             ('base_pwm', 80),            # open-loop forward/back effort
-            ('min_pwm', 45),             # below this the wheels stall (stiction)
+            ('min_pwm_left', 45),        # below this the wheel stalls (stiction);
+            ('min_pwm_right', 45),       # motors differ, so measure each one
             ('max_pwm', 255),
             ('deadband_mode', 'floor'),  # 'floor' | 'rescale'
             ('pwm_slew_per_s', 400.0),   # limits current surge on a step command
@@ -316,8 +317,8 @@ class WheelControl(Node):
         self.pwm_l = self.slew(self.pwm_l, target_l)
         self.pwm_r = self.slew(self.pwm_r, target_r)
 
-        out_l = self.shape(self.pwm_l)
-        out_r = self.shape(self.pwm_r)
+        out_l = self.shape(self.pwm_l, float(self.P['min_pwm_left']))
+        out_r = self.shape(self.pwm_r, float(self.P['min_pwm_right']))
         self.send(out_l, out_r)
         self.publish_debug(w_d, w_sp, u, heading_err, out_l, out_r)
 
@@ -327,7 +328,7 @@ class WheelControl(Node):
         """Spin-in-place rate back to the parked heading, or None if close enough.
 
         Two thresholds rather than one: shape() lifts any non-zero output to
-        min_pwm, so a correction overshoots a single deadband's edge and the
+        the wheel's min_pwm, so a correction overshoots a single deadband's edge and the
         robot buzzes back and forth across it.
         """
         err_deg = abs(math.degrees(heading_err))
@@ -348,18 +349,19 @@ class WheelControl(Node):
             return current - step
         return target
 
-    def shape(self, pwm: float) -> int:
+    def shape(self, pwm: float, lo: float) -> int:
         """Clamp, then lift the output out of the stiction deadband.
 
         A wheel commanded 12/255 does nothing but heat the motor, so any
-        non-zero command is pushed up to min_pwm.
+        non-zero command is pushed up to `lo`, that wheel's own min_pwm - two
+        motors of the same model rarely start turning at the same PWM.
 
         'floor' (default) keeps base_pwm meaning exactly what you set - an 80
         stays an 80 - at the cost of a small step as the output crosses
-        min_pwm. 'rescale' maps the whole range into [min_pwm, max_pwm] for a
+        lo. 'rescale' maps the whole range into [lo, max_pwm] for a
         smooth response, but then base_pwm=80 actually leaves as ~110.
         """
-        lo, hi = float(self.P['min_pwm']), float(self.P['max_pwm'])
+        hi = float(self.P['max_pwm'])
         mag = min(abs(pwm), hi)
         if mag < 1.0:
             return 0

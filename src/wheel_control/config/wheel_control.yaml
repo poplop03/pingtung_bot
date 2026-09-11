@@ -9,7 +9,8 @@
     # ---- control loop ----
     control_rate_hz: 50.0
     base_pwm: 30              # open-loop forward/reverse effort
-    min_pwm: 27               # measure this: lowest PWM that actually turns a wheel
+    min_pwm_left: 27          # measure each wheel: lowest PWM that actually turns it
+    min_pwm_right: 27
     max_pwm: 255
     deadband_mode: floor      # 'floor' keeps base_pwm literal; 'rescale' is smoother
     pwm_slew_per_s: 400.0     # PWM counts/s; lower = gentler on the battery

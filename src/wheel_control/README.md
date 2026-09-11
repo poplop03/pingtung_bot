@@ -44,8 +44,10 @@ the floor. See "Drift" below.
 
 ## Tuning order
 
-1. **Measure `min_pwm`.** Raise both wheels off the ground, command increasing
-   PWM, note where they reliably start turning. Put that in the config.
+1. **Measure `min_pwm_left` and `min_pwm_right`.** Raise both wheels off the
+   ground, command increasing PWM, and note where each wheel reliably starts
+   turning. The two motors usually differ, so measure them separately. "Left"
+   means the robot's left wheel, after `swap_motors` has been applied.
 2. **Measure `k_ff`.** With the loop disabled (`kp=ki=0`, `heading_hold=false`),
    command a few fixed differential values and record steady-state ω from
    `/wheel_control/debug`. `k_ff = u / ω`. This is the single most valuable
@@ -109,7 +111,7 @@ wheel odometry, the same missing sensor as in "Drift" above.
 | `k_hold` | 2.0 | rad/s of spin per rad of error |
 | `hold_max_rate` | 0.5 | rad/s cap on the recovery spin |
 
-Why two thresholds: any non-zero output is lifted to `min_pwm`, so with a
+Why two thresholds: any non-zero output is lifted to the wheel's `min_pwm_left`/`min_pwm_right`, so with a
 single deadband the correction overshoots its edge and the robot buzzes. If it
 still hunts, widen the gap between them. If a recovery stalls short of the
 settle band, raise `k_hold`.
