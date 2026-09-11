@@ -28,6 +28,13 @@
     k_heading: 1.2            # rad/s of correction per rad of heading error
     max_heading_corr: 0.6     # rad/s; keep well under your max turn rate
 
+    # ---- idle hold: park on the last heading, spin back if knocked round ----
+    idle_hold: true           # false = motors off whenever there is no command
+    hold_tolerance_deg: 3.0   # error that starts a correction
+    hold_settle_deg: 1.0      # error at which the motors stop again; keep < tolerance
+    k_hold: 2.0               # rad/s of spin per rad of error; raise if recovery stalls
+    hold_max_rate: 0.5        # rad/s cap on the recovery spin
+
     # ---- IMU ----
     imu_topic: /bno055/imu
     imu_yaw_sign: 1.0         # set -1.0 if the BNO055 z axis points down

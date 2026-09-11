@@ -27,6 +27,15 @@ CONTROL LAW (per cycle)
 
     pwm_left  = base - u        pwm_right = base + u
 
+IDLE HOLD (idle_hold: true)
+
+With no command - /cmd_vel zero, or timed out - the loop keeps running in
+MODE_HOLD instead of cutting the motors. yaw_ref freezes at the heading the
+robot had when the last command ended; a disturbance bigger than
+hold_tolerance_deg is spun back out until it is under hold_settle_deg.
+Heading only: nothing on this robot measures translation, so a push that
+moves the robot is not undone. v is 0 in this mode, so it never travels.
+
 Sign convention is REP-103: +x forward, +z up, so +w is counter-clockwise
 (turning left), which means the RIGHT wheel speeds up. If your robot turns
 the wrong way, flip `imu_yaw_sign` first, then `swap_motors` - flipping both
@@ -47,7 +56,11 @@ from wheel_control.motor_link import MotorLink
 from wheel_control.pid import PID
 
 # operating modes
-MODE_STOP, MODE_DRIVE, MODE_SPIN = 'stop', 'drive', 'spin'
+MODE_STOP, MODE_DRIVE, MODE_SPIN, MODE_HOLD = 'stop', 'drive', 'spin', 'hold'
+
+# While parked in MODE_HOLD, gyro readings above this are someone moving the
+# robot, not bias, and must not be fed to the bias re-estimate.
+HOLD_STILL_RATE = 0.02          # rad/s, ~1.1 deg/s
 
 
 def wrap_pi(angle: float) -> float:
@@ -89,6 +102,13 @@ class WheelControl(Node):
             ('k_heading', 1.2),          # rad/s of correction per rad of error
             ('max_heading_corr', 0.6),   # rad/s
 
+            # idle hold: keep the parked heading against disturbances
+            ('idle_hold', False),
+            ('hold_tolerance_deg', 3.0),  # error that starts a correction
+            ('hold_settle_deg', 1.0),     # error at which the motors stop again
+            ('k_hold', 2.0),              # rad/s of spin per rad of error
+            ('hold_max_rate', 0.5),       # rad/s
+
             # IMU
             ('imu_topic', '/imu/data'),
             ('imu_yaw_sign', 1.0),       # -1.0 if the BNO055 is mounted inverted
@@ -107,6 +127,11 @@ class WheelControl(Node):
                   for name in self._parameters
                   if name not in ('use_sim_time',)}
 
+        if float(self.P['hold_settle_deg']) >= float(self.P['hold_tolerance_deg']):
+            self.get_logger().warn(
+                "hold_settle_deg should be well below hold_tolerance_deg, "
+                "otherwise idle hold chatters on the edge of its deadband")
+
         # ---------------- state ----------------
         self.v_cmd = 0.0            # m/s-ish; only its sign is used
         self.w_cmd_in = 0.0         # rad/s, from /cmd_vel
@@ -124,6 +149,7 @@ class WheelControl(Node):
         self.yaw_meas = 0.0
         self.mode = MODE_STOP
         self.prev_mode = MODE_STOP
+        self.hold_active = False    # MODE_HOLD is currently correcting
 
         self.pwm_l = 0.0
         self.pwm_r = 0.0
@@ -155,6 +181,7 @@ class WheelControl(Node):
 
         self.get_logger().info(
             f"wheel_control up on {self.P['port']} | base_pwm={self.P['base_pwm']} | "
+            f"idle_hold={self.P['idle_hold']} | "
             f"hold the robot still for gyro bias calibration "
             f"({self.P['calib_samples']} samples)")
 
@@ -209,23 +236,35 @@ class WheelControl(Node):
         if not self.calibrated:
             self.stop(None)
             return
-        if cmd_stale:
-            self.stop(None)
-            return
 
-        v, w_d = self.v_cmd, self.w_cmd_in
+        if cmd_stale:
+            if not self.P['idle_hold']:
+                self.stop(None)
+                return
+            # Nobody is driving. Idle hold treats that as a zero command: v stays
+            # 0, so the base may rotate back to its heading but never travels.
+            v, w_d = 0.0, 0.0
+        else:
+            v, w_d = self.v_cmd, self.w_cmd_in
 
         # --- mode ---
         moving = abs(v) > 1e-3
         turning = abs(w_d) > 1e-3
-        mode = MODE_DRIVE if moving else (MODE_SPIN if turning else MODE_STOP)
+        if moving:
+            mode = MODE_DRIVE
+        elif turning:
+            mode = MODE_SPIN
+        else:
+            mode = MODE_HOLD if self.P['idle_hold'] else MODE_STOP
 
         if mode != self.prev_mode:
             # Re-seed the heading reference on every mode change, otherwise the
             # error accumulated while stopped gets dumped into the wheels the
-            # instant you command motion.
+            # instant you command motion. Entering HOLD, this is also what fixes
+            # the heading to return to: the one the last command ended on.
             self.pid.reset()
             self.yaw_ref = self.yaw_meas
+            self.hold_active = False
             self.prev_mode = mode
         self.mode = mode
 
@@ -233,21 +272,37 @@ class WheelControl(Node):
             self.stop(None)
             self.maybe_rezero_bias(now)
             return
-        self.stationary_since = None
 
         # --- integrate both yaws ---
         self.yaw_meas = wrap_pi(self.yaw_meas + self.w_meas * self.dt)
         self.yaw_ref = wrap_pi(self.yaw_ref + w_d * self.dt)
+        heading_err = wrap_pi(self.yaw_ref - self.yaw_meas)
 
-        # --- outer loop: heading hold ---
-        heading_err = 0.0
-        w_sp = w_d
-        if self.P['heading_hold']:
-            heading_err = wrap_pi(self.yaw_ref - self.yaw_meas)
-            corr = float(self.P['k_heading']) * heading_err
-            limit = float(self.P['max_heading_corr'])
-            corr = max(-limit, min(limit, corr))
-            w_sp = w_d + corr
+        if mode == MODE_HOLD:
+            w_sp = self.hold_setpoint(heading_err)
+            if w_sp is None:
+                # Inside tolerance: motors off, but yaw keeps integrating so a
+                # later push is still measured against the parked heading.
+                self.pwm_l = self.pwm_r = 0.0
+                self.pid.reset()
+                self.link.set(0, 0)
+                if abs(self.w_meas) < HOLD_STILL_RATE:
+                    self.maybe_rezero_bias(now)
+                else:
+                    self.stationary_since = None
+                self.publish_debug(0.0, 0.0, 0.0, heading_err, 0, 0)
+                return
+        else:
+            # --- outer loop: heading hold ---
+            w_sp = w_d
+            if self.P['heading_hold']:
+                corr = float(self.P['k_heading']) * heading_err
+                limit = float(self.P['max_heading_corr'])
+                corr = max(-limit, min(limit, corr))
+                w_sp = w_d + corr
+            else:
+                heading_err = 0.0
+        self.stationary_since = None
 
         # --- inner loop: yaw rate ---
         ff = float(self.P['k_ff']) * w_sp
@@ -267,6 +322,23 @@ class WheelControl(Node):
         self.publish_debug(w_d, w_sp, u, heading_err, out_l, out_r)
 
     # ---------------- helpers ----------------
+
+    def hold_setpoint(self, heading_err: float):
+        """Spin-in-place rate back to the parked heading, or None if close enough.
+
+        Two thresholds rather than one: shape() lifts any non-zero output to
+        min_pwm, so a correction overshoots a single deadband's edge and the
+        robot buzzes back and forth across it.
+        """
+        err_deg = abs(math.degrees(heading_err))
+        if self.hold_active and err_deg < float(self.P['hold_settle_deg']):
+            self.hold_active = False
+        elif not self.hold_active and err_deg > float(self.P['hold_tolerance_deg']):
+            self.hold_active = True
+        if not self.hold_active:
+            return None
+        limit = float(self.P['hold_max_rate'])
+        return max(-limit, min(limit, float(self.P['k_hold']) * heading_err))
 
     def slew(self, current: float, target: float) -> float:
         step = float(self.P['pwm_slew_per_s']) * self.dt
@@ -311,6 +383,7 @@ class WheelControl(Node):
         self.pwm_l = self.pwm_r = 0.0
         self.pid.reset()
         self.yaw_ref = self.yaw_meas
+        self.hold_active = False
         self.prev_mode = MODE_STOP
         self.link.set(0, 0)          # firmware runs its own ramped stop
 

@@ -88,13 +88,48 @@ battery voltage, payload and floor surface, and nav stacks that assume the
 commanded velocity was achieved will not work well against this. That is a fine
 trade for now, but it is the next thing to fix — wheel encoders would close it.
 
+## Idle hold
+
+With `idle_hold: true` the controller keeps running when nobody is driving,
+whether `/cmd_vel` is zero or has timed out. The robot parks on the heading it
+had when the last command ended. If it is knocked round by more than
+`hold_tolerance_deg`, it spins in place back to that heading and switches the
+motors off again once inside `hold_settle_deg`.
+
+**Heading only, not position.** Nothing on this robot measures translation: the
+IMU gives yaw rate and the wheels have no encoders. A push that slides the
+robot is invisible to it, and it will not drive back. Holding a full pose needs
+wheel odometry, the same missing sensor as in "Drift" above.
+
+| param | default | meaning |
+|---|---|---|
+| `idle_hold` | `false` in code, `true` in `config/wheel_control.yaml` | on/off switch |
+| `hold_tolerance_deg` | 3.0 | error that starts a correction |
+| `hold_settle_deg` | 1.0 | error at which the motors stop again |
+| `k_hold` | 2.0 | rad/s of spin per rad of error |
+| `hold_max_rate` | 0.5 | rad/s cap on the recovery spin |
+
+Why two thresholds: any non-zero output is lifted to `min_pwm`, so with a
+single deadband the correction overshoots its edge and the robot buzzes. If it
+still hunts, widen the gap between them. If a recovery stalls short of the
+settle band, raise `k_hold`.
+
+To tune, put the robot on the floor, rotate it about 20° by hand, let go, and
+watch `heading_err` (index 7) on `/wheel_control/debug`.
+
+While parked, gyro bias is re-estimated only when the gyro reads under about
+1°/s, so being pushed is not learned as bias.
+
+**With `idle_hold` on, the robot moves without a command.** Turn it off, or lift
+the wheels, before working on the base.
+
 ## Safety
 
 Three independent stops, which is the right number:
 
 | condition | action |
 |---|---|
-| no `/cmd_vel` for `cmd_timeout_s` (0.5 s) | node commands 0 |
+| no `/cmd_vel` for `cmd_timeout_s` (0.5 s) | node commands 0; with `idle_hold`, holds heading instead (rotation only, `v` is forced to 0) |
 | **no `/imu/data` for `imu_timeout_s` (0.3 s)** | node commands 0 |
 | no serial packet for 300 ms | **firmware** ramps to a stop on its own |
 
