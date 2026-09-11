@@ -13,7 +13,7 @@ def generate_launch_description():
     # Resolving path for bno055 parameter file
     bno055_params = os.path.join(
         get_package_share_directory('bno055'),
-        'params',
+        'config',
         'bno055_params_i2c.yaml'
     )
 
@@ -31,7 +31,7 @@ def generate_launch_description():
     bno055_node = Node(
         package='bno055',
         executable='bno055',
-        name='bno055_node',      # Explicitly named for cleaner ros2 node list output
+        name='bno055',           # must match the top-level key in bno055_params_i2c.yaml
         output='screen',
         parameters=[bno055_params]
     )
@@ -40,7 +40,7 @@ def generate_launch_description():
     wheel_control_node = Node(
         package='wheel_control',
         executable='wheel_control_node',
-        name='wheel_control_node',
+        name='wheel_control',    # must match the top-level key in wheel_control.yaml
         output='screen',
         parameters=[wheel_control_params]
     )
