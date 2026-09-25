@@ -16,8 +16,35 @@ over USB serial and drives every actuator.
 | 2 × stepper motors | Mega → step/dir drivers | gantry axes |
 | 1 × MG996R servo | Mega D8 | gripper |
 
-Pinout and wiring notes are at the top of
-[Arduino/mega_bridge/mega_bridge.ino](Arduino/mega_bridge/mega_bridge.ino).
+### Arduino Mega pinout
+
+| Mega pin | connects to | signal | notes |
+|---|---|---|---|
+| D0 / D1 | USB serial | RX / TX to the Jetson | used by the USB link, leave unconnected |
+| D2 | stepper driver 1 `PUL+` | step pulse | gantry axis 1 |
+| D3 | stepper driver 1 `DIR+` | direction | |
+| D5 | stepper driver 2 `PUL+` | step pulse | gantry axis 2 |
+| D6 | stepper driver 2 `DIR+` | direction | |
+| D8 | MG996R signal (orange) | servo PWM | gripper; servo power comes from a separate 5–6 V supply |
+| D9 / D10 | — | — | **reserved** for the water pump PWM |
+| D11 | JZ2407DB motor 1 `EN` | wheel PWM | Timer1, ≈3.9 kHz |
+| D12 | JZ2407DB motor 2 `EN` | wheel PWM | Timer1, ≈3.9 kHz |
+| D22 | JZ2407DB motor 1 `IN1` | direction A | |
+| D23 | JZ2407DB motor 1 `IN2` | direction B | |
+| D24 | JZ2407DB motor 2 `IN1` | direction A | |
+| D25 | JZ2407DB motor 2 `IN2` | direction B | |
+| GND | driver GND, stepper `PUL−`/`DIR−`, servo supply − | common ground | **mandatory**: every supply shares this ground |
+
+- **Stepper drivers:** `PUL−` and `DIR−` go to GND. The drivers are wired
+  common-cathode, so an output driven HIGH is active.
+- **JZ2407DB:** it was previously driven by the ESP32's 3.3 V logic. Check the
+  datasheet to confirm its IN/EN inputs accept the Mega's 5 V.
+- **Spare pins:** the sketch speeds up Timer1 for the wheel EN pins, so don't
+  add a library that also uses Timer1. The Servo library occupies Timer5, so
+  D44–D46 have no PWM.
+- **Changing a pin:** edit the constants at the top of
+  [mega_bridge.ino](Arduino/mega_bridge/mega_bridge.ino) and update this table
+  too.
 
 ## Architecture
 
