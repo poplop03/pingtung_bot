@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>mega_bridge</name>
+  <version>0.1.0</version>
+  <description>
+    Serial bridge to the Arduino Mega that drives the wheels, the two gantry
+    steppers and the gripper servo. Owns the port; exposes /mega/* topics.
+  </description>
+  <maintainer email="thienductang@gmail.com">dan</maintainer>
+  <license>MIT</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>python3-serial</exec_depend>
+  <!-- crc8 is shared with the ESP32 link in wheel_control.motor_link -->
+  <exec_depend>wheel_control</exec_depend>
+
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

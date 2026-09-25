@@ -1,0 +1,10 @@
+/mega_bridge:
+  ros__parameters:
+
+    # ---- USB serial link to the Arduino Mega ----
+    port: /dev/ttyACM0
+    baud: 115200              # must match SERIAL_BAUD in mega_bridge.ino
+    tx_rate_hz: 50.0          # must stay well inside the firmware's 300 ms wheel failsafe
+
+    pwm_timeout_s: 0.5        # no /mega/wheel_pwm for this long -> wheels commanded 0
+    status_timeout_s: 1.0     # warn when /mega/status stops arriving
