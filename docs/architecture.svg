@@ -1,0 +1,193 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1324 724" width="1324" height="724" role="img" aria-label="Task logic publishes /mega/cmd_vel, /mega/step and /mega/gripper. wheel_control combines cmd_vel with the BNO055 IMU and publishes /mega/wheel_pwm. mega_bridge is the only node on the serial port. It sends DRIVE, STEP and SERVO frames over USB to the Arduino Mega and publishes the Mega's STATUS frames as /mega/status. The Mega drives the wheel driver, the two stepper drivers and the gripper servo.">
+  <title>pingtung_bot architecture</title>
+  <style>
+    svg { --bg: #FFFFFF; --ink: #17201D; --muted: #58645F; --rule: #CAD2CE; --jetson: #2E5C8A; --jetson-soft: #EAF0F7; --mega: #00767C; --mega-soft: #E3F2F1; --usb: #A95C0B; --hw: #E4E8E6; --hw-stroke: #7C8883; }
+    @media (prefers-color-scheme: dark) { svg { --bg: #161E1B; --ink: #E3EAE7; --muted: #97A49F; --rule: #33413C; --jetson: #83B2E2; --jetson-soft: #172432; --mega: #52C6C4; --mega-soft: #112B2A; --usb: #F2A94F; --hw: #242D2A; --hw-stroke: #7D8A85; } }
+    .bg { fill: var(--bg); }
+    .zone-jetson { fill: var(--jetson-soft); stroke: var(--jetson); stroke-width: 1; stroke-dasharray: 6 5; }
+    .zone-mega { fill: var(--mega-soft); stroke: var(--mega); stroke-width: 1; stroke-dasharray: 6 5; }
+    .ros { fill: var(--bg); stroke: var(--jetson); stroke-width: 1.5; }
+    .ros-ext { fill: var(--bg); stroke: var(--jetson); stroke-width: 1.5; stroke-dasharray: 5 4; }
+    .fw { fill: var(--bg); stroke: var(--mega); stroke-width: 1.5; }
+    .hw { fill: var(--hw); stroke: var(--hw-stroke); stroke-width: 1; }
+    .wire { stroke: var(--ink); stroke-width: 1.6; fill: none; }
+    .wire-hw { stroke: var(--muted); stroke-width: 1.4; fill: none; }
+    .frame { stroke: var(--usb); stroke-width: 2.2; fill: none; }
+    .usb-line { stroke: var(--usb); stroke-width: 1.5; stroke-dasharray: 3 5; fill: none; }
+    .plate { fill: var(--bg); }
+    .ah-ink { fill: var(--ink); }
+    .ah-hw { fill: var(--muted); }
+    .ah-usb { fill: var(--usb); }
+    text { font-family: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, Helvetica, Arial, sans-serif; }
+    .t-title { font-weight: 600; font-size: 14px; fill: var(--ink); }
+    .t-sub { font-size: 12px; fill: var(--muted); }
+    .t-mono, .t-small, .t-frame { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .t-mono { font-weight: 500; font-size: 12px; fill: var(--ink); }
+    .t-small { font-size: 11px; fill: var(--muted); }
+    .t-frame { font-weight: 500; font-size: 11px; fill: var(--usb); }
+    .t-zone { font-weight: 600; font-size: 12px; letter-spacing: 0.09em; }
+    .t-legend { font-size: 12px; fill: var(--muted); }
+    .z-jetson { fill: var(--jetson); }
+    .z-mega { fill: var(--mega); }
+    .z-hw { fill: var(--muted); }
+  </style>
+  <rect class="bg" x="0" y="0" width="1324" height="724" rx="12"/>
+
+          <defs>
+            <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" class="ah-ink"/>
+            </marker>
+            <marker id="ah-hw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" class="ah-hw"/>
+            </marker>
+            <marker id="ah-usb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" class="ah-usb"/>
+            </marker>
+          </defs>
+
+          <!-- zones -->
+          <rect x="16" y="48" width="840" height="620" rx="14" class="zone-jetson"/>
+          <text x="36" y="78" class="t-zone z-jetson">JETSON ORIN NX</text>
+          <text x="36" y="96" class="t-sub">ROS 2 Humble · Python nodes</text>
+
+          <rect x="932" y="48" width="196" height="620" rx="14" class="zone-mega"/>
+          <text x="950" y="78" class="t-zone z-mega">ARDUINO MEGA</text>
+          <text x="950" y="96" class="t-sub">one non-blocking loop()</text>
+
+          <text x="1188" y="78" class="t-zone z-hw">ACTUATORS</text>
+          <text x="1188" y="96" class="t-sub">wired to Mega pins</text>
+
+          <!-- USB boundary -->
+          <line x1="894" y1="44" x2="894" y2="668" class="usb-line"/>
+          <rect x="770" y="18" width="248" height="20" class="plate"/>
+          <text x="894" y="33" text-anchor="middle" class="t-frame">USB · 115200 baud · CRC-8 frames</text>
+
+          <!-- row 1: IMU -->
+          <rect x="40" y="98" width="170" height="64" rx="6" class="hw"/>
+          <text x="125" y="125" text-anchor="middle" class="t-title">BNO055 IMU</text>
+          <text x="125" y="144" text-anchor="middle" class="t-small">I²C bus 7 · 0x28</text>
+
+          <line x1="210" y1="130" x2="328" y2="130" class="wire-hw" marker-end="url(#ah-hw)"/>
+          <text x="269" y="121" text-anchor="middle" class="t-small">I²C, 100 Hz</text>
+
+          <rect x="330" y="98" width="170" height="64" rx="8" class="ros"/>
+          <text x="415" y="125" text-anchor="middle" class="t-title">bno055</text>
+          <text x="415" y="144" text-anchor="middle" class="t-sub">IMU driver node</text>
+
+          <line x1="415" y1="162" x2="415" y2="248" class="wire" marker-end="url(#ah)"/>
+          <text x="427" y="202" class="t-mono">/bno055/imu</text>
+          <text x="427" y="218" class="t-small">yaw rate</text>
+
+          <!-- task logic -->
+          <rect x="40" y="240" width="170" height="390" rx="8" class="ros-ext"/>
+          <text x="125" y="428" text-anchor="middle" class="t-title">task logic</text>
+          <text x="125" y="447" text-anchor="middle" class="t-sub">teleop · your nodes</text>
+
+          <!-- wheel_control -->
+          <rect x="330" y="250" width="170" height="80" rx="8" class="ros"/>
+          <text x="415" y="280" text-anchor="middle" class="t-title">wheel_control</text>
+          <text x="415" y="299" text-anchor="middle" class="t-sub">heading hold</text>
+          <text x="415" y="316" text-anchor="middle" class="t-sub">+ yaw-rate PI</text>
+
+          <!-- mega_bridge -->
+          <rect x="630" y="240" width="160" height="390" rx="8" class="ros"/>
+          <text x="710" y="420" text-anchor="middle" class="t-title">mega_bridge</text>
+          <text x="710" y="439" text-anchor="middle" class="t-sub">only node on the port</text>
+          <text x="710" y="457" text-anchor="middle" class="t-small">/dev/ttyACM0</text>
+
+          <!-- topics -->
+          <line x1="210" y1="290" x2="328" y2="290" class="wire" marker-end="url(#ah)"/>
+          <text x="269" y="281" text-anchor="middle" class="t-mono">/mega/cmd_vel</text>
+          <text x="269" y="306" text-anchor="middle" class="t-small">Twist</text>
+
+          <line x1="500" y1="290" x2="628" y2="290" class="wire" marker-end="url(#ah)"/>
+          <text x="565" y="281" text-anchor="middle" class="t-mono">/mega/wheel_pwm</text>
+          <text x="565" y="306" text-anchor="middle" class="t-small">[m1, m2] · 50 Hz</text>
+
+          <line x1="210" y1="410" x2="628" y2="410" class="wire" marker-end="url(#ah)"/>
+          <text x="226" y="401" class="t-mono">/mega/step</text>
+          <text x="226" y="426" class="t-small">[step1, step2] · relative</text>
+
+          <line x1="210" y1="500" x2="628" y2="500" class="wire" marker-end="url(#ah)"/>
+          <text x="226" y="491" class="t-mono">/mega/gripper</text>
+          <text x="226" y="516" class="t-small">degrees, 0–180</text>
+
+          <line x1="630" y1="590" x2="212" y2="590" class="wire" marker-end="url(#ah)"/>
+          <text x="226" y="581" class="t-mono">/mega/status</text>
+          <text x="226" y="606" class="t-small">[left1, left2, servo°, failsafe] · 10 Hz</text>
+
+          <!-- serial frames across USB -->
+          <line x1="790" y1="290" x2="950" y2="290" class="frame" marker-end="url(#ah-usb)"/>
+          <rect x="808" y="270" width="126" height="16" class="plate"/>
+          <text x="871" y="282" text-anchor="middle" class="t-frame">0x01 DRIVE · 50 Hz</text>
+
+          <line x1="790" y1="410" x2="950" y2="410" class="frame" marker-end="url(#ah-usb)"/>
+          <rect x="815" y="390" width="112" height="16" class="plate"/>
+          <text x="871" y="402" text-anchor="middle" class="t-frame">0x02 STEP · once</text>
+
+          <line x1="790" y1="500" x2="950" y2="500" class="frame" marker-end="url(#ah-usb)"/>
+          <rect x="811" y="480" width="120" height="16" class="plate"/>
+          <text x="871" y="492" text-anchor="middle" class="t-frame">0x03 SERVO · once</text>
+
+          <line x1="952" y1="590" x2="792" y2="590" class="frame" marker-end="url(#ah-usb)"/>
+          <rect x="805" y="570" width="132" height="16" class="plate"/>
+          <text x="871" y="582" text-anchor="middle" class="t-frame">0x81 STATUS · 10 Hz</text>
+
+          <!-- Mega firmware modules -->
+          <rect x="952" y="250" width="156" height="80" rx="6" class="fw"/>
+          <text x="1030" y="278" text-anchor="middle" class="t-title">wheel driver</text>
+          <text x="1030" y="297" text-anchor="middle" class="t-sub">soft-brake ramp</text>
+          <text x="1030" y="314" text-anchor="middle" class="t-sub">300 ms failsafe</text>
+
+          <rect x="952" y="378" width="156" height="64" rx="6" class="fw"/>
+          <text x="1030" y="404" text-anchor="middle" class="t-title">2 × AccelStepper</text>
+          <text x="1030" y="423" text-anchor="middle" class="t-small">400 steps/s</text>
+
+          <rect x="952" y="468" width="156" height="64" rx="6" class="fw"/>
+          <text x="1030" y="494" text-anchor="middle" class="t-title">servo easing</text>
+          <text x="1030" y="513" text-anchor="middle" class="t-small">1° every 15 ms</text>
+
+          <rect x="952" y="558" width="156" height="64" rx="6" class="fw"/>
+          <text x="1030" y="584" text-anchor="middle" class="t-title">status report</text>
+          <text x="1030" y="603" text-anchor="middle" class="t-small">every 100 ms</text>
+
+          <!-- Mega to hardware -->
+          <line x1="1108" y1="290" x2="1186" y2="290" class="wire-hw" marker-end="url(#ah-hw)"/>
+          <text x="1147" y="281" text-anchor="middle" class="t-small">PWM 3.9k</text>
+
+          <line x1="1108" y1="410" x2="1186" y2="410" class="wire-hw" marker-end="url(#ah-hw)"/>
+          <text x="1147" y="401" text-anchor="middle" class="t-small">STEP/DIR</text>
+
+          <line x1="1108" y1="500" x2="1186" y2="500" class="wire-hw" marker-end="url(#ah-hw)"/>
+          <text x="1147" y="491" text-anchor="middle" class="t-small">servo PWM</text>
+
+          <!-- hardware -->
+          <rect x="1188" y="250" width="120" height="80" rx="6" class="hw"/>
+          <text x="1248" y="276" text-anchor="middle" class="t-title">JZ2407DB</text>
+          <text x="1248" y="295" text-anchor="middle" class="t-sub">2 DC wheels</text>
+          <text x="1248" y="315" text-anchor="middle" class="t-small">D11/12 · D22–25</text>
+
+          <rect x="1188" y="378" width="120" height="64" rx="6" class="hw"/>
+          <text x="1248" y="398" text-anchor="middle" class="t-title">stepper drivers</text>
+          <text x="1248" y="415" text-anchor="middle" class="t-sub">gantry, 2 axes</text>
+          <text x="1248" y="433" text-anchor="middle" class="t-small">D2/3 · D5/6</text>
+
+          <rect x="1188" y="468" width="120" height="64" rx="6" class="hw"/>
+          <text x="1248" y="488" text-anchor="middle" class="t-title">MG996R servo</text>
+          <text x="1248" y="505" text-anchor="middle" class="t-sub">gripper</text>
+          <text x="1248" y="523" text-anchor="middle" class="t-small">D8</text>
+
+          <!-- legend -->
+          <rect x="20" y="697" width="24" height="14" rx="3" class="ros"/>
+          <text x="52" y="708" class="t-legend">ROS 2 node in this repo</text>
+          <rect x="231" y="697" width="24" height="14" rx="3" class="ros-ext"/>
+          <text x="263" y="708" class="t-legend">your nodes (teleop, task logic)</text>
+          <rect x="495" y="697" width="24" height="14" rx="3" class="fw"/>
+          <text x="527" y="708" class="t-legend">Mega firmware module</text>
+          <rect x="687" y="697" width="24" height="14" rx="3" class="hw"/>
+          <text x="719" y="708" class="t-legend">hardware</text>
+          <line x1="799" y1="704" x2="823" y2="704" class="wire"/>
+          <text x="831" y="708" class="t-legend">ROS topic</text>
+          <line x1="918" y1="704" x2="942" y2="704" class="frame"/>
+          <text x="950" y="708" class="t-legend">serial frame</text>
+</svg>
