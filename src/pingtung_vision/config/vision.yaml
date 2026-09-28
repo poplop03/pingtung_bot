@@ -1,0 +1,23 @@
+/vision:
+  ros__parameters:
+    # Exactly one of: off, animal, fruit_color, pig_shit.
+    algorithm: "off"
+    camera_topic: /camera/image_raw
+    processing_rate_hz: 10.0
+    camera_timeout_s: 0.5
+    publish_debug_image: false
+
+    # The packaged v2 checkpoint is used unless this is overridden.
+    animal.device: auto
+    animal.confidence_threshold: 0.65
+    animal.ema_alpha: 0.25
+
+    fruit.max_side: 384
+    fruit.roi_width: 0.68
+    fruit.roi_height: 0.74
+    fruit.stable_frames: 4
+    fruit.line_tolerance_px: 10
+    fruit.centroid_ema_alpha: 0.30
+
+    pig_shit.max_side: 384
+    pig_shit.spatial_ema_alpha: 0.25

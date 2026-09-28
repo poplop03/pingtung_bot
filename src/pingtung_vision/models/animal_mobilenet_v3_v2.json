@@ -1,0 +1,10 @@
+{
+  "class_ids": {
+    "dog": 1,
+    "monkey": 2,
+    "rabbit": 3,
+    "turtle": 4
+  },
+  "image_size": 192,
+  "best_val_macro_f1": 1.0
+}
