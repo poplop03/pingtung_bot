@@ -8,3 +8,4 @@
 
     pwm_timeout_s: 0.5        # no /mega/wheel_pwm for this long -> wheels commanded 0
     status_timeout_s: 1.0     # warn when /mega/status stops arriving
+    home_file: ~/.ros/mega_bridge_home.txt   # gantry position vs home, kept across restarts ('' = off)

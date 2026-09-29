@@ -26,6 +26,7 @@ setup(
     entry_points={
         'console_scripts': [
             'mega_bridge_node = mega_bridge.mega_bridge_node:main',
+            'gantry_test = mega_bridge.gantry_test_node:main',
         ],
     },
 )

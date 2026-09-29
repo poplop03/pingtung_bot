@@ -12,6 +12,7 @@
 
   <exec_depend>rclpy</exec_depend>
   <exec_depend>std_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
   <exec_depend>python3-serial</exec_depend>
   <!-- crc8 is shared with the ESP32 link in wheel_control.motor_link -->
   <exec_depend>wheel_control</exec_depend>

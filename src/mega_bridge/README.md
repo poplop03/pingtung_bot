@@ -20,7 +20,29 @@ Mega's serial port.
 | `/mega/step` | `std_msgs/Int32MultiArray` `[step1, step2]` | **relative** steps. They are added to the current target, so `[1600, 0]` sent twice moves 3200 |
 | `/mega/gripper` | `std_msgs/Float32` | servo angle in degrees, clamped to 0–180 and eased at 1°/15 ms |
 | `/mega/wheel_pwm` | `std_msgs/Int16MultiArray` `[m1, m2]` | wheel PWM −255..255, from `wheel_control` |
-| `/mega/status` (out) | `std_msgs/Int32MultiArray` | 10 Hz: `[steps_left1, steps_left2, servo_deg, wheel_failsafe]` |
+| `/mega/status` (out) | `std_msgs/Int32MultiArray` | 10 Hz: `[steps_left1, steps_left2, servo_deg, wheel_failsafe, pos1, pos2]`, `pos` in steps from home |
+
+## Services
+
+| service | type | meaning |
+|---|---|---|
+| `/mega/set_home` | `std_srvs/Trigger` | the gantry's current position becomes home: `pos1`, `pos2` read 0 from then on. Refused while either axis is moving |
+
+There are no limit switches and the firmware only reports `steps_left`, so
+`mega_bridge` tracks the position itself from the steps it sends. Put the
+gantry at home (jog it with `/mega/step`, or move it by hand with the Mega off),
+then call `set_home`:
+
+```bash
+ros2 topic pub --once /mega/step std_msgs/Int32MultiArray "{data: [-200, 0]}"   # jog
+ros2 service call /mega/set_home std_srvs/srv/Trigger
+```
+
+Every time the gantry stops, its position is written to `home_file`
+(`~/.ros/mega_bridge_home.txt`) and read back when `mega_bridge` starts, so home
+survives a restart. That assumes the gantry did not move while the node was
+down. If it did, or a step frame was lost on the wire, the position is off:
+re-home and call `set_home` again. Delete the file to forget home.
 
 A gantry move is finished when both `steps_left` read 0. That is the signal to
 close the gripper.
@@ -30,6 +52,23 @@ ros2 topic pub --once /mega/step std_msgs/Int32MultiArray "{data: [1600, -800]}"
 ros2 topic pub --once /mega/gripper std_msgs/Float32 "{data: 45.0}"
 ros2 topic echo /mega/status
 ```
+
+### Gantry test
+
+`gantry_test` moves each axis out and back and opens, closes and reopens the
+gripper. It waits for `/mega/status` to show each command finished before
+sending the next, then exits with PASS/FAIL. There is no homing, so start away
+from the ends of travel.
+
+```bash
+ros2 launch pingtung_bot_bringup bringup.launch.py base:=false gantry_test:=true
+# or, with mega_bridge already running:
+ros2 run mega_bridge gantry_test --ros-args -p axis1_steps:=200 -p axis2_steps:=200 -p cycles:=3
+```
+
+Parameters: `axis1_steps`, `axis2_steps` (800), `test_axis1`, `test_axis2`,
+`test_gripper` (true), `gripper_open` (90), `gripper_closed` (20), `cycles` (1),
+`move_timeout_s` (30).
 
 ## Safety
 

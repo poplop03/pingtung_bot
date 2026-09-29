@@ -52,7 +52,7 @@ from geometry_msgs.msg import Twist
 from sensor_msgs.msg import Imu
 from std_msgs.msg import Float32MultiArray
 
-from wheel_control.motor_link import MotorLink
+from wheel_control.motor_link import MotorLink, TopicLink
 from wheel_control.pid import PID
 
 # operating modes
@@ -75,6 +75,11 @@ class WheelControl(Node):
 
         # ---------------- parameters ----------------
         self.declare_parameters('', [
+            # output: 'serial' drives the ESP32 directly on `port`;
+            # 'topic' publishes /mega/wheel_pwm for mega_bridge (Arduino Mega)
+            ('output', 'serial'),
+            ('wheel_pwm_topic', '/mega/wheel_pwm'),
+
             # serial
             ('port', '/dev/ttyUSB0'),
             ('baud', 115200),
@@ -163,12 +168,21 @@ class WheelControl(Node):
         )
 
         # ---------------- I/O ----------------
-        try:
-            self.link = MotorLink(self.P['port'], int(self.P['baud']),
-                                  float(self.P['tx_rate_hz']), logger=self.get_logger())
-        except Exception as exc:
-            self.get_logger().fatal(f"cannot open {self.P['port']}: {exc}")
-            raise
+        if self.P['output'] == 'topic':
+            self.link = TopicLink(self, self.P['wheel_pwm_topic'],
+                                  float(self.P['tx_rate_hz']))
+            out_desc = self.P['wheel_pwm_topic']
+        elif self.P['output'] == 'serial':
+            try:
+                self.link = MotorLink(self.P['port'], int(self.P['baud']),
+                                      float(self.P['tx_rate_hz']),
+                                      logger=self.get_logger())
+            except Exception as exc:
+                self.get_logger().fatal(f"cannot open {self.P['port']}: {exc}")
+                raise
+            out_desc = self.P['port']
+        else:
+            raise ValueError(f"output must be 'serial' or 'topic', got {self.P['output']!r}")
 
         self.create_subscription(Twist, 'cmd_vel', self.on_cmd_vel, 10)
         self.create_subscription(Imu, self.P['imu_topic'], self.on_imu,
@@ -181,7 +195,7 @@ class WheelControl(Node):
         self.create_timer(self.dt, self.on_control)
 
         self.get_logger().info(
-            f"wheel_control up on {self.P['port']} | base_pwm={self.P['base_pwm']} | "
+            f"wheel_control up -> {out_desc} | base_pwm={self.P['base_pwm']} | "
             f"idle_hold={self.P['idle_hold']} | "
             f"hold the robot still for gyro bias calibration "
             f"({self.P['calib_samples']} samples)")

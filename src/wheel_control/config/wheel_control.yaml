@@ -9,17 +9,17 @@
     # ---- control loop ----
     control_rate_hz: 50.0
     base_pwm: 30              # open-loop forward/reverse effort
-    min_pwm_left: 27          # measure each wheel: lowest PWM that actually turns it
-    min_pwm_right: 27
+    min_pwm_left: 50          # measure each wheel: lowest PWM that actually turns it
+    min_pwm_right: 25
     max_pwm: 255
     deadband_mode: floor      # 'floor' keeps base_pwm literal; 'rescale' is smoother
     pwm_slew_per_s: 400.0     # PWM counts/s; lower = gentler on the battery
 
     # ---- inner loop: yaw rate (PWM counts per rad/s) ----
-    k_ff: 30.0                # feedforward. Tune FIRST, before any gain below.
+    k_ff: 33.0                # feedforward. Tune FIRST, before any gain below.
     kp: 20.0
-    ki: 1.0
-    kd: 0.01                  # leave at 0 unless you have a real reason
+    ki: 10.0
+    kd: 0.0                  # leave at 0 unless you have a real reason
     kd_tau: 0.08              # derivative low-pass, seconds
     i_limit: 90.0             # cap on the integral's contribution, PWM counts
     u_limit: 175.0            # 255 - base_pwm: the actual differential headroom

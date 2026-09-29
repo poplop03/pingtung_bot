@@ -167,6 +167,7 @@ source install/setup.bash
 
 # 3. whole robot (IMU + wheel_control + mega_bridge) - keep it still while the gyro calibrates
 ros2 launch pingtung_bot_bringup bringup.launch.py
+#    args: port:=/dev/ttyACM0   base:=false (gantry + gripper only, no IMU/wheel_control)
 
 # 4. command it
 ros2 topic pub -r 10 /mega/cmd_vel geometry_msgs/Twist "{linear: {x: 0.1}}"

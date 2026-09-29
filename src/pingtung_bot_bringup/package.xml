@@ -3,13 +3,17 @@
 <package format="3">
   <name>pingtung_bot_bringup</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>Top-level bringup for pingtung_bot: base (IMU + wheel_control) and gantry (mega_bridge)</description>
   <maintainer email="dan@todo.todo">dan</maintainer>
   <license>TODO: License declaration</license>
 
   <depend>rclpy</depend>
   <depend>launch</depend>
   <depend>launch_ros</depend>
+
+  <exec_depend>bno055</exec_depend>
+  <exec_depend>wheel_control</exec_depend>
+  <exec_depend>mega_bridge</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

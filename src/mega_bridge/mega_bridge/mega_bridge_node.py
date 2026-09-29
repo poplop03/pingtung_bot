@@ -6,7 +6,19 @@ mega_bridge - the one node that owns the serial port to the Arduino Mega.
     /mega/step      (Int32MultiArray [s1, s2]) --+--> USB serial --> Mega
     /mega/gripper   (Float32, degrees)         --'
     /mega/status    (Int32MultiArray)          <----- 10 Hz from the Mega
-                    [steps_left1, steps_left2, servo_deg, wheel_failsafe]
+                    [steps_left1, steps_left2, servo_deg, wheel_failsafe, pos1, pos2]
+    /mega/set_home  (std_srvs/Trigger)         current gantry position becomes home
+
+pos1/pos2 are steps from home. The firmware only reports steps_left, so the
+position is tracked here: the Mega's target starts at 0 when it resets (which
+it does when this node opens the port), every /mega/step goes through this
+node, and pos = sum of steps sent - steps_left - home. There are no limit
+switches: jog the gantry to home by hand or with /mega/step, then call
+/mega/set_home. It is refused while either axis is moving.
+
+The position is saved to home_file whenever the gantry stops, and read back
+at startup, so home survives a restart of this node - as long as nothing
+moves the gantry while the node is down. Delete the file to forget it.
 
 /mega/cmd_vel is not handled here: wheel_control turns it into wheel PWM
 (with the IMU heading loop) and publishes /mega/wheel_pwm.
@@ -20,6 +32,7 @@ twice moves stepper 1 by 3200 in total.
 All writes happen on one thread, so frames never interleave on the wire.
 """
 
+import os
 import queue
 import threading
 import time
@@ -28,8 +41,11 @@ import rclpy
 import serial
 from rclpy.node import Node
 from std_msgs.msg import Float32, Int16MultiArray, Int32MultiArray
+from std_srvs.srv import Trigger
 
 from mega_bridge import protocol as proto
+
+FRESH_STATUS = 2    # statuses to wait for after a step before trusting steps_left == 0
 
 
 class MegaBridge(Node):
@@ -43,6 +59,7 @@ class MegaBridge(Node):
             ('tx_rate_hz', 50.0),       # must stay well inside the 300 ms failsafe
             ('pwm_timeout_s', 0.5),     # stale /mega/wheel_pwm -> send 0
             ('status_timeout_s', 1.0),  # warn if the Mega stops reporting
+            ('home_file', '~/.ros/mega_bridge_home.txt'),   # '' = do not persist
         ])
         self.P = {name: self.get_parameter(name).value
                   for name in self._parameters
@@ -62,6 +79,14 @@ class MegaBridge(Node):
         self._pwm = (0, 0)
         self._pwm_t = float('-inf')           # monotonic time of last wheel_pwm
         self._status_t = time.monotonic()     # grace period before the first warn
+        self._rem = None                      # last steps_left from the Mega
+        self._target = [0, 0]                 # sum of steps sent since the Mega reset
+        self._home = [0, 0]                   # target value that is home
+        self._status_n = 0                    # statuses received
+        self._step_n = -FRESH_STATUS          # _status_n when the last step was queued
+        self._saved = None                    # position last written to home_file
+        self._home_file = os.path.expanduser(self.P['home_file']) if self.P['home_file'] else ''
+        self._load_home()
         self._events = queue.Queue()          # encoded STEP / SERVO frames
         self._decoder = proto.Decoder()
         self._running = True
@@ -71,6 +96,7 @@ class MegaBridge(Node):
         self.create_subscription(Int32MultiArray, '/mega/step', self.on_step, 10)
         self.create_subscription(Float32, '/mega/gripper', self.on_gripper, 10)
         self.status_pub = self.create_publisher(Int32MultiArray, '/mega/status', 10)
+        self.create_service(Trigger, '/mega/set_home', self.on_set_home)
         self.create_timer(1.0, self.check_status_age)
 
         self._tx = threading.Thread(target=self._tx_loop, daemon=True)
@@ -95,7 +121,11 @@ class MegaBridge(Node):
             self.get_logger().warn(f'/mega/step needs [step1, step2], got {list(msg.data)}')
             return
         s1, s2 = int(msg.data[0]), int(msg.data[1])
-        self._events.put(proto.encode_step(s1, s2))
+        with self._lock:
+            self._target[0] += s1
+            self._target[1] += s2
+            self._step_n = self._status_n
+            self._events.put(proto.encode_step(s1, s2))
         self.get_logger().info(f'step {s1} {s2}')
 
     def on_gripper(self, msg: Float32):
@@ -103,6 +133,73 @@ class MegaBridge(Node):
         if not 0.0 <= deg <= 180.0:
             self.get_logger().warn(f'gripper {deg:.1f} deg clamped to 0..180')
         self._events.put(proto.encode_servo(deg))
+
+    def on_set_home(self, request, response):
+        with self._lock:
+            if self._rem is None:
+                response.success = False
+                response.message = 'no status from the Mega yet'
+                return response
+            if not self._idle():
+                response.success = False
+                response.message = (f'gantry is moving (steps left {self._rem[0]}, {self._rem[1]}),'
+                                    ' wait for it to stop')
+                return response
+            old = self._position()
+            self._home = list(self._target)   # _rx_loop saves it with the next status
+        response.success = True
+        response.message = f'home set, was at {old[0]}, {old[1]} steps from the old home'
+        self.get_logger().info(f'set_home: {response.message}')
+        return response
+
+    # ---------------- position / home ----------------
+
+    def _position(self):
+        """Steps from home. Call with self._lock held and _rem known."""
+        return [self._target[i] - self._rem[i] - self._home[i] for i in (0, 1)]
+
+    def _idle(self):
+        """Both axes stopped. Call with self._lock held."""
+        # a status sent before the Mega got the last step still reads 0 left
+        return (self._rem is not None and not any(self._rem)
+                and self._status_n - self._step_n >= FRESH_STATUS)
+
+    def _load_home(self):
+        # The Mega just reset, so its target is 0 and the gantry is at the
+        # position saved last time: put home that far behind 0.
+        if not self._home_file:
+            return
+        try:
+            with open(self._home_file) as f:
+                pos = [int(v) for v in f.read().split()[:2]]
+            if len(pos) != 2:
+                raise ValueError('expected two integers')
+        except FileNotFoundError:
+            self.get_logger().warn(
+                f'no saved home in {self._home_file}: home is where the gantry is now. '
+                'Jog it to home and call /mega/set_home')
+            return
+        except (OSError, ValueError) as exc:
+            self.get_logger().error(f'cannot read {self._home_file} ({exc}), home not restored')
+            return
+        self._home = [-pos[0], -pos[1]]
+        self._saved = pos
+        self.get_logger().info(f'home restored: gantry at {pos[0]}, {pos[1]} steps from home')
+
+    def _save_home(self, pos):
+        """Only called from _rx_loop, so writes never overlap."""
+        if not self._home_file or pos == self._saved:
+            return
+        self._saved = pos
+        try:
+            os.makedirs(os.path.dirname(self._home_file) or '.', exist_ok=True)
+            tmp = self._home_file + '.tmp'
+            with open(tmp, 'w') as f:
+                f.write(f'{pos[0]} {pos[1]}\n')
+            os.replace(tmp, self._home_file)          # never leave a half-written file
+        except OSError as exc:
+            self.get_logger().error(f'cannot save home to {self._home_file}: {exc}',
+                                    throttle_duration_sec=5.0)
 
     def check_status_age(self):
         with self._lock:
@@ -158,8 +255,14 @@ class MegaBridge(Node):
                 rem1, rem2, servo, flags = proto.decode_status(payload)
                 with self._lock:
                     self._status_t = time.monotonic()
+                    self._rem = (rem1, rem2)
+                    self._status_n += 1
+                    pos1, pos2 = self._position()
+                    idle = self._idle()
+                if idle:
+                    self._save_home([pos1, pos2])       # no-op unless it changed
                 msg = Int32MultiArray()
-                msg.data = [rem1, rem2, servo, flags & proto.FLAG_FAILSAFE]
+                msg.data = [rem1, rem2, servo, flags & proto.FLAG_FAILSAFE, pos1, pos2]
                 self.status_pub.publish(msg)
 
     def destroy_node(self):

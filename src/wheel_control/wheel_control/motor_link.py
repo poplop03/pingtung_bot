@@ -86,3 +86,37 @@ class MotorLink:
             self.ser.close()
         except Exception:
             pass
+
+
+class TopicLink:
+    """Same interface as MotorLink, but publishes to mega_bridge instead.
+
+    Used with the Arduino Mega: mega_bridge owns the serial port, so this
+    node streams [m1, m2] on /mega/wheel_pwm at a fixed rate and the bridge
+    forwards it. The bridge's own pwm timeout stops the wheels if we die.
+    """
+
+    def __init__(self, node, topic: str = '/mega/wheel_pwm', rate_hz: float = 50.0):
+        from std_msgs.msg import Int16MultiArray
+        self._msg_type = Int16MultiArray
+        self._cmd = (0, 0)
+        self._pub = node.create_publisher(Int16MultiArray, topic, 10)
+        self._timer = node.create_timer(1.0 / rate_hz, self._publish)
+
+    def set(self, m1: int, m2: int) -> None:
+        self._cmd = (max(-255, min(255, int(m1))), max(-255, min(255, int(m2))))
+
+    def get(self):
+        return self._cmd
+
+    def _publish(self) -> None:
+        msg = self._msg_type()
+        msg.data = list(self._cmd)
+        self._pub.publish(msg)
+
+    def close(self) -> None:
+        self.set(0, 0)
+        try:
+            self._publish()
+        except Exception:
+            pass                              # context already shut down

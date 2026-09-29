@@ -38,12 +38,12 @@ class WheelOpenLoop(Node):
         # ---------------- parameters ----------------
         self.declare_parameters('', [
             # serial
-            ('port', '/dev/ttyUSB0'),
+            ('port', '/dev/ttyACM0'),
             ('baud', 115200),
             ('tx_rate_hz', 50.0),
 
             # mix - keep equal to wheel_control.yaml for a fair comparison
-            ('base_pwm', 80),            # forward/back effort, = base_pwm there
+            ('base_pwm', 30),            # forward/back effort, = base_pwm there
             ('k_turn', 35.0),            # PWM counts per rad/s, = k_ff there
             ('max_pwm', 255),
 
@@ -52,7 +52,7 @@ class WheelOpenLoop(Node):
             ('cmd_timeout_s', 0.5),
             ('swap_motors', False),
             ('invert_motor1', False),
-            ('invert_motor2', False),
+            ('invert_motor2', True),
             ('publish_debug', True),
         ])
         self.P = {name: self.get_parameter(name).value

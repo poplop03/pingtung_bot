@@ -151,6 +151,11 @@ ros2 launch wheel_control wheel_control.launch.py port:=/dev/ttyUSB0
 ros2 run teleop_twist_keyboard teleop_twist_keyboard
 ```
 
+`output` picks where the PWM goes: `serial` (default) drives the ESP32 on
+`port` directly; `topic` publishes `std_msgs/Int16MultiArray [m1, m2]` on
+`wheel_pwm_topic` (`/mega/wheel_pwm`) for `mega_bridge`, which owns the Arduino
+Mega's port. `pingtung_bot_bringup` sets `output: topic`.
+
 You need a BNO055 driver publishing `sensor_msgs/Imu` on `/imu/data`
 (`ros2 run bno055 bno055` from the `bno055` package, or your own). Reading the
 IMU over I²C inside this node would couple sensor timing to control timing —
