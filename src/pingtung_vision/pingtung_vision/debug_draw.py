@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 
 from pingtung_vision.algorithms.fruit_color import Result as FruitResult
+from pingtung_vision.algorithms.fruit_color import hit_line_y
 from pingtung_vision.algorithms.fruit_color import roi_bounds
 
 
@@ -66,21 +67,23 @@ def draw_fruit(
     fps: float,
 ) -> np.ndarray:
     output = frame.copy()
-    middle_x = output.shape[1] // 2
     x0, y0, x1, y1 = roi_bounds(
+        output.shape[1], output.shape[0], roi_width, roi_height
+    )
+    line_y = hit_line_y(
         output.shape[1], output.shape[0], roi_width, roi_height
     )
     cv2.rectangle(output, (x0, y0), (x1 - 1, y1 - 1), (255, 180, 0), 2)
     cv2.line(
         output,
-        (middle_x, 0),
-        (middle_x, output.shape[0]),
+        (0, line_y),
+        (output.shape[1], line_y),
         (0, 255, 255),
         3,
     )
     if line_tolerance:
-        for x in (middle_x - line_tolerance, middle_x + line_tolerance):
-            cv2.line(output, (x, 0), (x, output.shape[0]), (0, 130, 130), 1)
+        for y in (line_y - line_tolerance, line_y + line_tolerance):
+            cv2.line(output, (0, y), (output.shape[1], y), (0, 130, 130), 1)
     if centroid is not None:
         cv2.drawMarker(
             output, centroid, (255, 0, 255), cv2.MARKER_CROSS, 28, 3

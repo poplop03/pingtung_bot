@@ -66,6 +66,7 @@ class FruitStabilityFilter:
         centroid: Optional[Tuple[float, float]],
         processed_shape: Tuple[int, int],
         frame_shape: Tuple[int, int],
+        line_y: Optional[int] = None,
     ) -> Tuple[int, Optional[Tuple[int, int]], int]:
         """Return line_hit, centroid in source-frame pixels, and streak."""
         frame_height, frame_width = frame_shape
@@ -112,8 +113,11 @@ class FruitStabilityFilter:
             int(round(float(self._smooth_centroid[0]))),
             int(round(float(self._smooth_centroid[1]))),
         )
+        # The hit line defaults to the horizontal centre row of the frame.
+        if line_y is None:
+            line_y = frame_height // 2
         line_hit = int(
-            abs(camera_centroid[0] - frame_width // 2)
+            abs(camera_centroid[1] - line_y)
             <= self.line_tolerance_px
         )
         return line_hit, camera_centroid, self.positive_streak

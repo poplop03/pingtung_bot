@@ -7,7 +7,7 @@
     tx_rate_hz: 50.0          # must stay well inside the firmware's 300 ms failsafe
 
     # ---- mix: copy from wheel_control.yaml so feedback is the only difference ----
-    base_pwm: 30              # = base_pwm in wheel_control.yaml
+    k_lin: 150.0              # = k_lin in wheel_control.yaml, PWM counts per m/s
     k_turn: 30.0              # = k_ff in wheel_control.yaml, PWM counts per rad/s
     max_pwm: 255
 

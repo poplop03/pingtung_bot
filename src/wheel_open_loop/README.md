@@ -9,7 +9,7 @@ PID, no heading hold. Use it as the baseline to show what the closed loop buys.
 ```
 
 ```
-base      = base_pwm · sign(v)      # 0 when v == 0
+base      = k_lin · v             # PWM counts per m/s
 u         = k_turn · ω              # same as k_ff in wheel_control
 pwm_left  = base − u
 pwm_right = base + u
@@ -30,7 +30,7 @@ Copy these from `wheel_control/config/wheel_control.yaml` into
 
 | wheel_open_loop | wheel_control |
 |---|---|
-| `base_pwm` | `base_pwm` |
+| `k_lin` | `k_lin` |
 | `k_turn` | `k_ff` |
 | `port`, `swap_motors`, `invert_motor1/2` | same names |
 

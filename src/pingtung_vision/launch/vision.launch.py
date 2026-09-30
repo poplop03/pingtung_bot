@@ -26,7 +26,18 @@ def generate_launch_description():
         description='Start the v4l2_camera node in this launch file',
     )
     video_device_arg = DeclareLaunchArgument(
-        'video_device', default_value='/dev/video6'
+        'video_device', default_value='/dev/video4'
+    )
+    web_view_arg = DeclareLaunchArgument(
+        'web_view',
+        default_value='true',
+        description='Serve /vision/debug_image at http://<robot-ip>:<web_port>/',
+    )
+    web_port_arg = DeclareLaunchArgument('web_port', default_value='8080')
+    debug_image_arg = DeclareLaunchArgument(
+        'publish_debug_image',
+        default_value=LaunchConfiguration('web_view'),
+        description='Publish annotated images (defaults to web_view)',
     )
     camera_node = Node(
         package='v4l2_camera',
@@ -63,8 +74,24 @@ def generate_launch_description():
                 'camera_topic': ParameterValue(
                     LaunchConfiguration('camera_topic'), value_type=str
                 ),
+                'publish_debug_image': ParameterValue(
+                    LaunchConfiguration('publish_debug_image'), value_type=bool
+                ),
             },
         ],
+    )
+    web_view_node = Node(
+        package='pingtung_vision',
+        executable='web_view_node',
+        name='vision_web_view',
+        output='screen',
+        emulate_tty=True,
+        condition=IfCondition(LaunchConfiguration('web_view')),
+        parameters=[{
+            'port': ParameterValue(
+                LaunchConfiguration('web_port'), value_type=int
+            ),
+        }],
     )
     return LaunchDescription(
         [
@@ -73,7 +100,11 @@ def generate_launch_description():
             camera_topic_arg,
             start_camera_arg,
             video_device_arg,
+            web_view_arg,
+            web_port_arg,
+            debug_image_arg,
             camera_node,
             node,
+            web_view_node,
         ]
     )

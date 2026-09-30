@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gc
 import os
+import signal
 import threading
 import time
 from typing import Optional
@@ -13,6 +14,7 @@ import rclpy
 from ament_index_python.packages import get_package_share_directory
 from cv_bridge import CvBridge
 from rcl_interfaces.msg import SetParametersResult
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.qos import (
@@ -266,7 +268,7 @@ class VisionNode(Node):
             self._publish_debug(debug, header)
 
     def _process_fruit(self, frame: np.ndarray, header: Header) -> None:
-        from pingtung_vision.algorithms.fruit_color import classify
+        from pingtung_vision.algorithms.fruit_color import classify, hit_line_y
 
         assert self._fruit_filter is not None
         roi_width = float(self.get_parameter('fruit.roi_width').value)
@@ -282,6 +284,7 @@ class VisionNode(Node):
             result.centroid,
             result.fruit_mask.shape,
             frame.shape[:2],
+            hit_line_y(frame.shape[1], frame.shape[0], roi_width, roi_height),
         )
         message = FruitLineHit()
         message.header = header
@@ -444,17 +447,31 @@ class VisionNode(Node):
         self._debug_pub.publish(message)
 
 
+def _hold_off_signals(deadline_s: float = 3.0) -> None:
+    """Let the cleanup finish, but never let the process outlive Ctrl+C.
+
+    Under ros2 launch, Ctrl+C reaches the node twice (terminal and launch), and
+    the second KeyboardInterrupt would cut destroy_node() short. Ignore it,
+    make SIGTERM kill at once, and exit hard if the cleanup hangs.
+    """
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    signal.signal(signal.SIGTERM, signal.SIG_DFL)
+    watchdog = threading.Timer(deadline_s, os._exit, (1,))
+    watchdog.daemon = True
+    watchdog.start()
+
+
 def main(args=None) -> None:
     rclpy.init(args=args)
     node = VisionNode()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
+        _hold_off_signals()
         node.destroy_node()
-        if rclpy.ok():
-            rclpy.shutdown()
+        rclpy.try_shutdown()
 
 
 if __name__ == '__main__':

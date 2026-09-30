@@ -1,0 +1,33 @@
+/pick_fruit:
+  ros__parameters:
+
+    # ---- web UI ----
+    host: 0.0.0.0
+    port: 8080
+    image_topic: /vision/debug_image   # annotated view with the ROI and hit line
+    jpeg_quality: 75
+    settings_file: ~/.ros/pick_fruit.json   # ready/hit positions + forward PWM, saved from the UI
+
+    # ---- driving ----
+    control_rate_hz: 20.0
+    # No wheel feedback, so speed is a base PWM (0..255), sent as linear.x = pwm / k_lin.
+    # k_lin is taken from wheel_control.yaml by the launch file so the two always match.
+    forward_pwm: 50.0         # drive PWM for W/S teleop and the autonomous run; used when
+                              # settings_file has none. Set speed in the UI changes it.
+    max_forward_pwm: 255.0    # slider limit
+    teleop_angular: 0.6       # angular.z (rad/s) for A/D
+    teleop_timeout_s: 0.3     # deadman: base stops if the browser stops refreshing a held key
+    zero_burst_s: 0.3         # keep publishing 0 this long after teleop or stop
+    vision_timeout_s: 1.0     # no valid /vision/fruit/line_hit -> pause driving
+    status_timeout_s: 1.0     # no /mega/status -> pause driving
+
+    # ---- hitting ----
+    # line_hit = 1: keep driving, hit_slowdown_pct slower, gantry -> "hit" position.
+    # line_hit = 0 for ready_delay_s AND the gantry reached "hit": gantry -> "ready", full forward_pwm again.
+    hit_slowdown_pct: 45    # 20 -> drive at 80% of forward_pwm while hitting
+    ready_delay_s: 0.3        # ignore line_hit dropping to 0 for shorter than this (0 = retract as soon as it reaches hit)
+    move_timeout_s: 20.0      # the gantry must reach ready (at START) / hit within this, or the run aborts
+
+    # ---- gripper (manual Open / Close buttons only) ----
+    gripper_open: 90.0        # degrees
+    gripper_closed: 20.0

@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>run_by_scenario</name>
+  <version>0.1.0</version>
+  <description>Record a teleop drive of the base as a scenario script and play it back, web UI with teleop and PWM.</description>
+  <maintainer email="thienductang@gmail.com">dan</maintainer>
+  <license>MIT</license>
+
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>mega_bridge</exec_depend>
+  <exec_depend>pingtung_bot_bringup</exec_depend>
+  <exec_depend>rcl_interfaces</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>wheel_control</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

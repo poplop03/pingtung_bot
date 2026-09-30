@@ -84,8 +84,8 @@ For runs longer than a minute or two you need an absolute heading reference —
 wheel odometry, a magnetometer away from the motors, or vision. Without one,
 "straight" degrades at roughly the residual bias rate.
 
-Also note: with a fixed `base_pwm` there is **no linear velocity control**.
-`cmd_vel.linear.x` is used only for its sign. Distance travelled will vary with
+Also note: there is **no closed-loop linear velocity control**. The base PWM is
+simply `k_lin * cmd_vel.linear.x`, assumed proportional. Distance travelled will vary with
 battery voltage, payload and floor surface, and nav stacks that assume the
 commanded velocity was achieved will not work well against this. That is a fine
 trade for now, but it is the next thing to fix — wheel encoders would close it.

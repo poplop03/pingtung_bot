@@ -23,9 +23,13 @@ and try small step counts first to check the direction.
     ros2 run mega_bridge gantry_test --ros-args -p axis1_steps:=200 -p test_axis2:=false
 """
 
+import os
+import signal
+import threading
 import time
 
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from std_msgs.msg import Float32, Int32MultiArray
 
@@ -147,18 +151,33 @@ class GantryTest(Node):
             ('PASS: ' if ok else 'FAIL: ') + text)
 
 
+def _hold_off_signals(deadline_s: float = 3.0) -> None:
+    """Let the cleanup finish, but never let the process outlive Ctrl+C.
+
+    Under ros2 launch, Ctrl+C reaches the node twice (terminal and launch), and
+    the second KeyboardInterrupt would cut destroy_node() short. Ignore it,
+    make SIGTERM kill at once, and exit hard if the cleanup hangs.
+    """
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    signal.signal(signal.SIGTERM, signal.SIG_DFL)
+    watchdog = threading.Timer(deadline_s, os._exit, (1,))
+    watchdog.daemon = True
+    watchdog.start()
+
+
 def main(args=None):
     rclpy.init(args=args)
     node = GantryTest()
     try:
         while rclpy.ok() and not node.done:
             rclpy.spin_once(node, timeout_sec=0.1)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
-    ok = node.ok
-    node.destroy_node()
-    if rclpy.ok():
-        rclpy.shutdown()
+    finally:
+        _hold_off_signals()
+        ok = node.ok
+        node.destroy_node()
+        rclpy.try_shutdown()
     raise SystemExit(0 if ok else 1)
 
 

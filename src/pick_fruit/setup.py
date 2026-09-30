@@ -4,7 +4,7 @@ from glob import glob
 from setuptools import find_packages, setup
 
 
-package_name = 'pingtung_vision'
+package_name = 'pick_fruit'
 
 
 setup(
@@ -25,22 +25,17 @@ setup(
             os.path.join('share', package_name, 'config'),
             glob('config/*.yaml'),
         ),
-        (
-            os.path.join('share', package_name, 'models'),
-            glob('models/*'),
-        ),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='dan',
     maintainer_email='thienductang@gmail.com',
-    description='Selectable animal, fruit-colour, and pig/shit vision node.',
+    description='Drive forward and pick red/yellow fruit with the gantry.',
     license='MIT',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'vision_node = pingtung_vision.vision_node:main',
-            'web_view_node = pingtung_vision.web_view_node:main',
+            'pick_fruit_node = pick_fruit.pick_fruit_node:main',
         ],
     },
 )

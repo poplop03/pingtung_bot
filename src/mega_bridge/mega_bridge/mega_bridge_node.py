@@ -4,6 +4,7 @@ mega_bridge - the one node that owns the serial port to the Arduino Mega.
 
     /mega/wheel_pwm (Int16MultiArray [m1, m2]) --.
     /mega/step      (Int32MultiArray [s1, s2]) --+--> USB serial --> Mega
+    /mega/goto      (Int32MultiArray [x, y])   --|
     /mega/gripper   (Float32, degrees)         --'
     /mega/status    (Int32MultiArray)          <----- 10 Hz from the Mega
                     [steps_left1, steps_left2, servo_deg, wheel_failsafe, pos1, pos2]
@@ -15,6 +16,11 @@ it does when this node opens the port), every /mega/step goes through this
 node, and pos = sum of steps sent - steps_left - home. There are no limit
 switches: jog the gantry to home by hand or with /mega/step, then call
 /mega/set_home. It is refused while either axis is moving.
+
+/mega/goto takes an ABSOLUTE position [x, y] in steps from home (x = axis 1,
+the same numbers as pos1/pos2 in /mega/status). It is turned into the relative
+step that takes the current target there, so it is correct even while the
+gantry is still moving, and sending the same [x, y] twice moves only once.
 
 The position is saved to home_file whenever the gantry stops, and read back
 at startup, so home survives a restart of this node - as long as nothing
@@ -34,11 +40,13 @@ All writes happen on one thread, so frames never interleave on the wire.
 
 import os
 import queue
+import signal
 import threading
 import time
 
 import rclpy
 import serial
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from std_msgs.msg import Float32, Int16MultiArray, Int32MultiArray
 from std_srvs.srv import Trigger
@@ -94,6 +102,7 @@ class MegaBridge(Node):
         # ---------------- ROS I/O ----------------
         self.create_subscription(Int16MultiArray, '/mega/wheel_pwm', self.on_wheel_pwm, 10)
         self.create_subscription(Int32MultiArray, '/mega/step', self.on_step, 10)
+        self.create_subscription(Int32MultiArray, '/mega/goto', self.on_goto, 10)
         self.create_subscription(Float32, '/mega/gripper', self.on_gripper, 10)
         self.status_pub = self.create_publisher(Int32MultiArray, '/mega/status', 10)
         self.create_service(Trigger, '/mega/set_home', self.on_set_home)
@@ -122,11 +131,28 @@ class MegaBridge(Node):
             return
         s1, s2 = int(msg.data[0]), int(msg.data[1])
         with self._lock:
-            self._target[0] += s1
-            self._target[1] += s2
-            self._step_n = self._status_n
-            self._events.put(proto.encode_step(s1, s2))
+            self._queue_step(s1, s2)
         self.get_logger().info(f'step {s1} {s2}')
+
+    def on_goto(self, msg: Int32MultiArray):
+        if len(msg.data) != 2:
+            self.get_logger().warn(f'/mega/goto needs [x, y], got {list(msg.data)}')
+            return
+        x, y = int(msg.data[0]), int(msg.data[1])
+        with self._lock:
+            # relative to where the last command leaves the gantry, not where it is now
+            s1 = x - (self._target[0] - self._home[0])
+            s2 = y - (self._target[1] - self._home[1])
+            if s1 or s2:
+                self._queue_step(s1, s2)
+        self.get_logger().info(f'goto {x} {y} (step {s1} {s2})')
+
+    def _queue_step(self, s1, s2):
+        """Call with self._lock held."""
+        self._target[0] += s1
+        self._target[1] += s2
+        self._step_n = self._status_n
+        self._events.put(proto.encode_step(s1, s2))
 
     def on_gripper(self, msg: Float32):
         deg = float(msg.data)
@@ -277,17 +303,31 @@ class MegaBridge(Node):
         super().destroy_node()
 
 
+def _hold_off_signals(deadline_s: float = 3.0) -> None:
+    """Let the cleanup finish, but never let the process outlive Ctrl+C.
+
+    Under ros2 launch, Ctrl+C reaches the node twice (terminal and launch), and
+    the second KeyboardInterrupt would cut destroy_node() short. Ignore it,
+    make SIGTERM kill at once, and exit hard if the cleanup hangs.
+    """
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    signal.signal(signal.SIGTERM, signal.SIG_DFL)
+    watchdog = threading.Timer(deadline_s, os._exit, (1,))
+    watchdog.daemon = True
+    watchdog.start()
+
+
 def main(args=None):
     rclpy.init(args=args)
     node = MegaBridge()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
+        _hold_off_signals()
         node.destroy_node()
-        if rclpy.ok():
-            rclpy.shutdown()
+        rclpy.try_shutdown()
 
 
 if __name__ == '__main__':

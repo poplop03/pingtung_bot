@@ -55,11 +55,23 @@ def test_fruit_stable_but_off_centre_is_not_a_hit():
     output = None
     for _ in range(4):
         output = stability_filter.update(
-            0, (20.0, 50.0), (100, 100), (480, 640)
+            0, (50.0, 20.0), (100, 100), (480, 640)
         )
     assert output is not None
     assert output[0] == 0
-    assert output[1] == (128, 240)
+    assert output[1] == (320, 96)
+
+
+def test_fruit_hit_uses_horizontal_centre_line():
+    stability_filter = FruitStabilityFilter(
+        stable_frames=1, line_tolerance_px=10
+    )
+    # Far left of the frame but on the horizontal centre row: a hit.
+    hit, centroid, _ = stability_filter.update(
+        0, (5.0, 50.0), (100, 100), (480, 640)
+    )
+    assert hit == 1
+    assert centroid == (32, 240)
 
 
 def test_spatial_ema_and_label_transition_reset():

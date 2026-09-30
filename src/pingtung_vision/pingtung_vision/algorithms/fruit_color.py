@@ -79,6 +79,14 @@ def roi_bounds(
     return x0, y0, x0 + box_width, y0 + box_height
 
 
+def hit_line_y(
+    width: int, height: int, roi_width: float, roi_height: float
+) -> int:
+    """Hit-line row: one quarter of the ROI height above its bottom edge."""
+    _, y0, _, y1 = roi_bounds(width, height, roi_width, roi_height)
+    return y1 - (y1 - y0) // 4
+
+
 def best_component(
     mask: np.ndarray, roi_width: float = 1.0, roi_height: float = 1.0
 ) -> Optional[Component]:

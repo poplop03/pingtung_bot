@@ -138,6 +138,8 @@ pingtung_bot/
 │   └── pingtung_contest/     ESP32 wheel firmware from before the Mega (legacy)
 └── src/                      ROS 2 packages (colcon workspace)
     ├── pingtung_bot_bringup/ launch file that starts the whole robot
+    ├── pick_fruit/           drive forward + hit red/yellow fruit with the gantry, web UI
+    ├── run_by_scenario/      record a teleop drive as a script and play it back, web UI
     ├── mega_bridge/          serial bridge to the Mega, /mega/* topics
     ├── wheel_control/        closed-loop base controller (IMU heading hold)
     ├── wheel_open_loop/      open-loop baseline for comparison (ESP32 only)
@@ -185,7 +187,7 @@ Tests: `colcon test --packages-select mega_bridge && colcon test-result --verbos
 ## Limits
 
 - **No linear speed control.** The wheels have no encoders, so forward motion
-  is a fixed `base_pwm` and only the direction of `linear.x` counts. Distance
+  is open-loop: base PWM = `k_lin * linear.x`, assumed proportional. Distance
   varies with battery, load and floor.
 - **Heading drifts slowly.** It is integrated from the gyro because the
   magnetometer is unreliable next to the motors. Bias is re-estimated whenever

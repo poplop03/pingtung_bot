@@ -23,7 +23,7 @@ CONTROL LAW (per cycle)
     w_cmd     = w_d + clamp(k_heading * wrap(yaw_ref - yaw_meas), +/- max_corr)
 
     u         = k_ff * w_cmd + PI(w_cmd - w_meas)      # differential PWM
-    base      = base_pwm * sign(v)                     # 0 when v == 0
+    base      = k_lin * v                              # open-loop, no speed feedback
 
     pwm_left  = base - u        pwm_right = base + u
 
@@ -43,8 +43,12 @@ hides the problem instead of fixing it.
 """
 
 import math
+import os
+import signal
+import threading
 
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 
@@ -87,7 +91,7 @@ class WheelControl(Node):
 
             # control
             ('control_rate_hz', 50.0),
-            ('base_pwm', 80),            # open-loop forward/back effort
+            ('k_lin', 150.0),            # PWM counts per m/s, open-loop
             ('min_pwm_left', 45),        # below this the wheel stalls (stiction);
             ('min_pwm_right', 45),       # motors differ, so measure each one
             ('max_pwm', 255),
@@ -101,7 +105,7 @@ class WheelControl(Node):
             ('kd_tau', 0.08),
             ('k_ff', 35.0),              # feedforward, does most of the work
             ('i_limit', 90.0),
-            ('u_limit', 175.0),          # 255 - base_pwm, the real headroom
+            ('u_limit', 175.0),          # 255 - base PWM, the real headroom
 
             # heading-hold outer loop
             ('heading_hold', True),
@@ -139,7 +143,7 @@ class WheelControl(Node):
                 "otherwise idle hold chatters on the edge of its deadband")
 
         # ---------------- state ----------------
-        self.v_cmd = 0.0            # m/s-ish; only its sign is used
+        self.v_cmd = 0.0            # m/s-ish; scaled by k_lin into base PWM
         self.w_cmd_in = 0.0         # rad/s, from /cmd_vel
         self.last_cmd_t = self.get_clock().now()
 
@@ -195,7 +199,7 @@ class WheelControl(Node):
         self.create_timer(self.dt, self.on_control)
 
         self.get_logger().info(
-            f"wheel_control up -> {out_desc} | base_pwm={self.P['base_pwm']} | "
+            f"wheel_control up -> {out_desc} | k_lin={self.P['k_lin']} | "
             f"idle_hold={self.P['idle_hold']} | "
             f"hold the robot still for gyro bias calibration "
             f"({self.P['calib_samples']} samples)")
@@ -324,7 +328,8 @@ class WheelControl(Node):
         u = self.pid.update(w_sp, self.w_meas, self.dt, feedforward=ff)
 
         # --- mixing ---
-        base = float(self.P['base_pwm']) * (1.0 if v > 0 else -1.0) if moving else 0.0
+        # No wheel encoders: PWM is assumed proportional to speed.
+        base = float(self.P['k_lin']) * v if moving else 0.0
         target_l = base - u
         target_r = base + u
 
@@ -370,10 +375,10 @@ class WheelControl(Node):
         non-zero command is pushed up to `lo`, that wheel's own min_pwm - two
         motors of the same model rarely start turning at the same PWM.
 
-        'floor' (default) keeps base_pwm meaning exactly what you set - an 80
+        'floor' (default) keeps the computed PWM exactly as is - an 80
         stays an 80 - at the cost of a small step as the output crosses
         lo. 'rescale' maps the whole range into [lo, max_pwm] for a
-        smooth response, but then base_pwm=80 actually leaves as ~110.
+        smooth response, but then a computed 80 actually leaves as ~110.
         """
         hi = float(self.P['max_pwm'])
         mag = min(abs(pwm), hi)
@@ -436,17 +441,31 @@ class WheelControl(Node):
             super().destroy_node()
 
 
+def _hold_off_signals(deadline_s: float = 3.0) -> None:
+    """Let the cleanup finish, but never let the process outlive Ctrl+C.
+
+    Under ros2 launch, Ctrl+C reaches the node twice (terminal and launch), and
+    the second KeyboardInterrupt would cut destroy_node() short. Ignore it,
+    make SIGTERM kill at once, and exit hard if the cleanup hangs.
+    """
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    signal.signal(signal.SIGTERM, signal.SIG_DFL)
+    watchdog = threading.Timer(deadline_s, os._exit, (1,))
+    watchdog.daemon = True
+    watchdog.start()
+
+
 def main(args=None):
     rclpy.init(args=args)
     node = WheelControl()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
+        _hold_off_signals()
         node.destroy_node()
-        if rclpy.ok():
-            rclpy.shutdown()
+        rclpy.try_shutdown()
 
 
 if __name__ == '__main__':

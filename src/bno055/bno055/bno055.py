@@ -27,6 +27,8 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
+import os
+import signal
 import sys
 import threading
 
@@ -36,6 +38,7 @@ from bno055.error_handling.exceptions import BusOverRunException
 from bno055.params.NodeParameters import NodeParameters
 from bno055.sensor.SensorService import SensorService
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 
 
@@ -154,10 +157,17 @@ def main(args=None):
 
         rclpy.spin(node)
 
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         node.get_logger().info('Ctrl+C received - exiting...')
         sys.exit(0)
     finally:
+        # pingtung_bot: ros2 launch delivers Ctrl+C twice; do not let the second
+        # one interrupt the cleanup, and never outlive it by more than 3 s
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        signal.signal(signal.SIGTERM, signal.SIG_DFL)
+        watchdog = threading.Timer(3.0, os._exit, (1,))
+        watchdog.daemon = True
+        watchdog.start()
         node.get_logger().info('ROS node shutdown')
         try:
             node.destroy_timer(data_query_timer)
@@ -165,7 +175,7 @@ def main(args=None):
         except UnboundLocalError:
             node.get_logger().info('No timers to shutdown')
         node.destroy_node()
-        rclpy.shutdown()
+        rclpy.try_shutdown()
 
 
 if __name__ == '__main__':

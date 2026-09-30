@@ -7,7 +7,8 @@ Mega's serial port.
 
 ```
 /mega/cmd_vel ─► wheel_control (IMU heading loop) ─► /mega/wheel_pwm ─┐
-/mega/step ────────────────────────────────────────────────────────────┼─► mega_bridge ◄─► USB ◄─► Mega
+/mega/step ────────────────────────────────────────────────────────────┤
+/mega/goto ────────────────────────────────────────────────────────────┼─► mega_bridge ◄─► USB ◄─► Mega
 /mega/gripper ─────────────────────────────────────────────────────────┘        │
                                                                                 └─► /mega/status
 ```
@@ -18,6 +19,7 @@ Mega's serial port.
 |---|---|---|
 | `/mega/cmd_vel` | `geometry_msgs/Twist` | base speed. Handled by `wheel_control` with `output: topic`, not by this node |
 | `/mega/step` | `std_msgs/Int32MultiArray` `[step1, step2]` | **relative** steps. They are added to the current target, so `[1600, 0]` sent twice moves 3200 |
+| `/mega/goto` | `std_msgs/Int32MultiArray` `[x, y]` | **absolute** position in steps from home, `x` = axis 1 (same numbers as `pos1`, `pos2`). `[0, 0]` goes home. Works mid-move: it is measured from where the last command ends, and repeating it does not move again |
 | `/mega/gripper` | `std_msgs/Float32` | servo angle in degrees, clamped to 0–180 and eased at 1°/15 ms |
 | `/mega/wheel_pwm` | `std_msgs/Int16MultiArray` `[m1, m2]` | wheel PWM −255..255, from `wheel_control` |
 | `/mega/status` (out) | `std_msgs/Int32MultiArray` | 10 Hz: `[steps_left1, steps_left2, servo_deg, wheel_failsafe, pos1, pos2]`, `pos` in steps from home |
@@ -48,7 +50,8 @@ A gantry move is finished when both `steps_left` read 0. That is the signal to
 close the gripper.
 
 ```bash
-ros2 topic pub --once /mega/step std_msgs/Int32MultiArray "{data: [1600, -800]}"
+ros2 topic pub --once /mega/goto std_msgs/Int32MultiArray "{data: [1600, 800]}"   # absolute
+ros2 topic pub --once /mega/step std_msgs/Int32MultiArray "{data: [1600, -800]}"  # relative
 ros2 topic pub --once /mega/gripper std_msgs/Float32 "{data: 45.0}"
 ros2 topic echo /mega/status
 ```

@@ -8,7 +8,7 @@ No IMU, no PID, no heading hold. The mix is exactly wheel_control's
 feedforward path, so running the two back to back shows what the closed
 loop adds and nothing else:
 
-    base      = base_pwm * sign(v)                     # 0 when v == 0
+    base      = k_lin * v                              # = k_lin in wheel_control
     u         = k_turn * w                             # = k_ff in wheel_control
     pwm_left  = base - u        pwm_right = base + u
 
@@ -21,7 +21,12 @@ Deliberately left out: min_pwm lifting and slew limiting - the PWM sent is
 the PWM computed.
 """
 
+import os
+import signal
+import threading
+
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 
 from geometry_msgs.msg import Twist
@@ -43,7 +48,7 @@ class WheelOpenLoop(Node):
             ('tx_rate_hz', 50.0),
 
             # mix - keep equal to wheel_control.yaml for a fair comparison
-            ('base_pwm', 30),            # forward/back effort, = base_pwm there
+            ('k_lin', 150.0),            # PWM counts per m/s, = k_lin there
             ('k_turn', 35.0),            # PWM counts per rad/s, = k_ff there
             ('max_pwm', 255),
 
@@ -80,7 +85,7 @@ class WheelOpenLoop(Node):
         self.create_timer(1.0 / float(self.P['control_rate_hz']), self.on_control)
 
         self.get_logger().info(
-            f"wheel_open_loop up on {self.P['port']} | base_pwm={self.P['base_pwm']} | "
+            f"wheel_open_loop up on {self.P['port']} | k_lin={self.P['k_lin']} | "
             f"k_turn={self.P['k_turn']} | NO feedback")
 
     # ---------------- callbacks ----------------
@@ -96,7 +101,7 @@ class WheelOpenLoop(Node):
             left = right = 0
         else:
             v = self.v_cmd
-            base = float(self.P['base_pwm']) * (1.0 if v > 0 else -1.0) if abs(v) > 1e-3 else 0.0
+            base = float(self.P['k_lin']) * v
             u = float(self.P['k_turn']) * self.w_cmd
             left = self.clamp(base - u)
             right = self.clamp(base + u)
@@ -128,17 +133,31 @@ class WheelOpenLoop(Node):
             super().destroy_node()
 
 
+def _hold_off_signals(deadline_s: float = 3.0) -> None:
+    """Let the cleanup finish, but never let the process outlive Ctrl+C.
+
+    Under ros2 launch, Ctrl+C reaches the node twice (terminal and launch), and
+    the second KeyboardInterrupt would cut destroy_node() short. Ignore it,
+    make SIGTERM kill at once, and exit hard if the cleanup hangs.
+    """
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    signal.signal(signal.SIGTERM, signal.SIG_DFL)
+    watchdog = threading.Timer(deadline_s, os._exit, (1,))
+    watchdog.daemon = True
+    watchdog.start()
+
+
 def main(args=None):
     rclpy.init(args=args)
     node = WheelOpenLoop()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
+        _hold_off_signals()
         node.destroy_node()
-        if rclpy.ok():
-            rclpy.shutdown()
+        rclpy.try_shutdown()
 
 
 if __name__ == '__main__':

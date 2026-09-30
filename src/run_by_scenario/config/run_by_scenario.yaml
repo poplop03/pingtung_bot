@@ -1,0 +1,25 @@
+/run_by_scenario:
+  ros__parameters:
+
+    # ---- web UI ----
+    host: 0.0.0.0
+    port: 8080
+    scenario_dir: ~/.ros/scenarios              # one <name>.json per recorded scenario
+    settings_file: ~/.ros/run_by_scenario.json  # PWMs, control mode, last loaded scenario
+
+    # ---- driving ----
+    # Recording samples the teleop at this rate, so step times are exact to 1/rate s.
+    control_rate_hz: 50.0
+    # No wheel feedback, so both are PWM, at full W/S/A/D or full joystick deflection:
+    #   linear  -> linear.x  = pwm / k_lin   (base PWM)
+    #   angular -> angular.z = pwm / k_ff    (turn feedforward; wheel_control's yaw-rate loop still runs)
+    # k_lin and k_ff are taken from wheel_control.yaml by the launch file so they always match.
+    # The UI's Set button changes linear/angular_pwm and saves them in settings_file.
+    linear_pwm: 50.0
+    angular_pwm: 20.0
+    max_linear_pwm: 255.0     # slider limits, also clamp playback
+    max_angular_pwm: 255.0
+    control_mode: wasd        # wasd | joystick at first start; the UI switch is saved in settings_file
+    teleop_timeout_s: 0.3     # deadman: base stops if the browser stops refreshing a held key
+    zero_burst_s: 0.3         # keep publishing 0 this long after teleop, stop or the end of a playback
+    status_timeout_s: 1.0     # no /mega/status -> START refused, playback aborted
