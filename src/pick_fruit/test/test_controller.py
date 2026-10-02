@@ -281,9 +281,9 @@ def test_teleop_and_run_share_the_drive_pwm():
     assert sim.step() == (0.9, 0.0)
 
 
-def test_start_refuses_zero_pwm():
+def test_start_allows_zero_pwm_to_hit_standing_still():
     sim = Sim()
     sim.step()
     sim.ctrl.set_forward_pwm(0)
-    ok, message = sim.ctrl.start(sim.t)
-    assert not ok and 'PWM' in message
+    ok, _ = sim.ctrl.start(sim.t)
+    assert ok

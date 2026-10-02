@@ -40,6 +40,7 @@ DRIVE = 'drive'
 READY = 'ready'
 HIT = 'hit'
 POSITION_NAMES = (READY, HIT)
+HOME = 'home'                     # mega_bridge's home, always (0, 0); goto only, not saved
 LEGACY_NAMES = {'pick': HIT}      # settings files from the pick-and-grip version
 
 # Statuses to wait for after a command before trusting it finished. Same
@@ -165,8 +166,7 @@ class PickController:
             return False, 'no fruit vision - is the vision node in fruit_color mode?'
         if self.positions[HIT] is None:
             return False, 'save a hit position first'
-        if self.forward_pwm <= 0.0:
-            return False, 'drive PWM is 0 - try W/S to find a PWM, then Set speed'
+        # forward_pwm 0 is allowed: the robot stands still and only hits fruit
         self.running = True
         self.hits = 0
         self._teleop_t = -math.inf
@@ -224,6 +224,10 @@ class PickController:
         ok, message = self._manual_ok(now)
         if not ok:
             return ok, message
+        if name == HOME:
+            self._manual_n = self._status_n
+            self._out.append(('goto', (0, 0)))
+            return True, 'gantry to home (0, 0)'
         if name not in POSITION_NAMES or self.positions[name] is None:
             return False, f'no {name} position saved'
         self._manual_n = self._status_n

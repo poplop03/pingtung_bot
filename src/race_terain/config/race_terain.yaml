@@ -1,0 +1,64 @@
+/race_terain:
+  ros__parameters:
+
+    # ---- web UI ----
+    host: 0.0.0.0
+    port: 8080
+    dry_run: false            # true: watch the views while pushing the robot by hand, no driving
+    settings_file: ~/.ros/race_terain.json   # PWMs + height band from the UI; they win over this file
+
+    # ---- driving (PWM, no wheel encoders) ----
+    #   linear  -> linear.x  = linear_pwm / k_lin
+    #   angular -> |angular.z| <= angular_pwm / k_ff
+    # k_lin, k_ff and imu_yaw_sign are taken from wheel_control.yaml by the launch file.
+    linear_pwm: 50.0
+    angular_pwm: 35.0
+    max_linear_pwm: 255.0
+    max_angular_pwm: 100.0
+    speed_scale: 1.0          # real speed / (linear_pwm / k_lin); only for the 2 s point memory
+
+    # ---- course and robot, metres: MEASURE THESE ----
+    road_width: 0.8           # between the inner faces of the two rows
+    robot_width: 0.30
+    robot_length: 0.35        # camera to the robot's rear (drawing only)
+    margin: 0.05              # air kept each side of the robot
+
+    # ---- centre line and steering ----
+    trace_length: 1.5         # m of centre line traced ahead
+    trace_step: 0.1
+    trace_max_turn_deg: 25.0  # per step: tightest bend radius ~ step / turn = ~0.23 m
+    memory_s: 2.0             # keep objects that left the view this long (U-turn inner posts)
+    voxel: 0.03
+    pursuit_dist: 0.6         # aim this far along the centre line; shorter = tighter bends
+    k_yaw: 2.5                # rad/s per rad of angle to the aim point
+    slow_angle_deg: 35.0
+    min_speed_frac: 0.5       # speed while turning hard, fraction of linear_pwm
+    blocked_turn_frac: 0.7    # turn-in-place rate when the way ahead is blocked
+
+    # ---- finish ----
+    finish_radius: 1.2        # nothing beside the road within this ...
+    lost_hold_s: 1.5          # ... for this long = finished, stop
+    min_run_s: 3.0
+
+    # ---- depth (the node turns the depth image into a point cloud, like lane_runner) ----
+    depth_topic: /camera/camera/depth/image_rect_raw
+    info_topic: /camera/camera/depth/camera_info
+    stride: 2                 # every 2nd pixel of 424x240
+    min_height: 0.06          # m above the ground = a thing beside the road; above the
+                              # grass mat's wooden rim and the gravel, below the reflectors
+    max_height: 0.60
+    min_range: 0.0           # valid distance of the point cloud, m ahead of the camera:
+    max_range: 2.5           # only points in between are used (also set in the UI)
+    depth_timeout_s: 0.5
+    floor_iters: 60           # ground refitted every cloud (the robot pitches on rough ground)
+    floor_max_change_deg: 20.0    # a fit this far from the one at START is ignored
+    floor_max_change_m: 0.10
+    floor_fallback_height: 0.22   # only until the first good ground fit
+    floor_fallback_pitch_deg: 12.0
+
+    # ---- plumbing ----
+    calib_s: 1.0              # still time at START: gyro bias
+    straight_ms: 0.0          # after START: drive straight this many ms first (0 = skip); also set in the UI
+    teleop_timeout_s: 0.3     # teleop deadman: base stops if the page stops resending a held key
+    control_rate_hz: 20.0
+    imu_timeout_s: 0.3

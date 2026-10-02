@@ -1,0 +1,62 @@
+/lane_runner:
+  ros__parameters:
+
+    # ---- web UI ----
+    host: 0.0.0.0
+    port: 8080
+    dry_run: false            # true: watch the top-down view while pushing the robot by hand, no driving
+
+    # ---- driving ----
+    # PWM, as there are no wheel encoders. Both are also set live in the web UI; the UI's
+    # values are kept in settings_file and win over these at the next start.
+    #   linear  -> linear.x  = linear_pwm / k_lin      (lanes and the U-turn cross-over)
+    #   angular -> |angular.z| <= angular_pwm / k_ff   (dodging pigs and the U-turn pivots)
+    # k_lin, k_ff and imu_yaw_sign are taken from wheel_control.yaml by the launch file.
+    linear_pwm: 40.0
+    angular_pwm: 30.0         # 30 / k_ff 33 = ~0.9 rad/s
+    max_linear_pwm: 255.0     # UI limits
+    max_angular_pwm: 100.0    # 100 / k_ff 33 = ~3 rad/s; steering never needs more
+    pivot_min_pwm: 12.0       # a pivot never turns slower than this, to beat track friction
+    speed_scale: 1.0          # real speed / (linear_pwm / k_lin). Measure: time 1 m at linear_pwm -> v;
+                              # speed_scale = v * k_lin / linear_pwm
+    settings_file: ~/.ros/lane_runner.json
+    turn_left: true           # U-turn direction (also switchable in the web UI)
+
+    # ---- course and robot, metres: MEASURE THESE ----
+    robot_width: 0.30
+    robot_length: 0.35        # from the camera back to the robot's rear
+    margin: 0.06              # air kept each side of the robot
+    lane_width: 0.75          # inside, wall to wall
+    divider: 0.03             # the wall between the lanes
+
+    # ---- steering ----
+    look_ahead: 1.2           # m of lane used to find the free gap
+    pursuit_dist: 0.6         # aim point; shorter = sharper swerves
+    max_steer_deg: 35.0
+    k_yaw: 2.5                # rad/s per rad of heading error
+    pivot_tol_deg: 4.0
+    pivot_settle_s: 0.3
+    pivot_timeout_s: 10.0
+
+    # ---- end of lane ----
+    end_dist: 0.45            # a wall across the lane this close (from the camera) = end
+    end_frames: 3
+    end_min_travel: 0.5
+    emergency_dist: 0.22      # something in the path this close: turn in place only
+    cross_front_stop: 0.25
+    cross_timeout_s: 10.0
+
+    # ---- depth ----
+    min_height: 0.04          # m above the floor = obstacle (pigs are ~0.09 m)
+    max_height: 0.50
+    max_range: 2.0
+    near_range: 0.18          # the D415 sees nothing closer
+    depth_timeout_s: 0.5
+    stride: 2                 # every 2nd pixel of 424x240
+    calib_s: 1.5              # still time at START: gyro bias + floor fit
+    floor_fallback_height: 0.22     # only if the floor fit fails
+    floor_fallback_pitch_deg: 12.0
+
+    # ---- plumbing ----
+    control_rate_hz: 20.0
+    imu_timeout_s: 0.3

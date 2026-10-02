@@ -147,8 +147,12 @@ class PickFruitNode(Node):
                 pub.publish(Int32MultiArray(data=[int(arg[0]), int(arg[1])]))
 
         if self.ctrl.mode != self._last_mode:
-            log = self.get_logger().error if self.ctrl.error else self.get_logger().info
-            log(f'{self._last_mode} -> {self.ctrl.mode}: {self.ctrl.message}')
+            # separate calls: rclpy refuses one call site logging at two severities
+            text = f'{self._last_mode} -> {self.ctrl.mode}: {self.ctrl.message}'
+            if self.ctrl.error:
+                self.get_logger().error(text)
+            else:
+                self.get_logger().info(text)
             self._last_mode = self.ctrl.mode
 
         state = self.ctrl.snapshot(now)

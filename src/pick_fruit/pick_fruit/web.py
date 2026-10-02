@@ -148,6 +148,8 @@ INDEX_HTML = r"""<!doctype html>
         <button id="gset">Set &deg;</button>
       </div>
       <table style="margin-top:10px">
+        <tr><td>home</td><td class="num">0, 0</td><td></td>
+          <td><button data-goto="home">Go</button></td></tr>
         <tr><td>ready</td><td class="num" id="p_ready">-</td>
           <td><button data-save="ready">Save current</button></td>
           <td><button data-goto="ready">Go</button></td></tr>
